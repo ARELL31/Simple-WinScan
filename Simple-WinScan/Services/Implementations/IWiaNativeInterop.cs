@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using Simple_WinScan.Models;
@@ -10,5 +11,5 @@ namespace Simple_WinScan.Services.Implementations;
 public interface IWiaNativeInterop
 {
     IReadOnlyList<ScannerDeviceInfo> EnumerateDevices();
-    (byte[] RawBytes, int Width, int Height) TransferImage(ScannerDeviceInfo scanner, ScanProfile profile, CancellationToken cancellationToken);
+    (byte[] RawBytes, int Width, int Height) TransferImage(ScannerDeviceInfo scanner, ScanProfile profile, IProgress<int>? progress, CancellationToken cancellationToken);
 }

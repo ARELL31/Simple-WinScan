@@ -10,7 +10,8 @@ using Simple_WinScan.Services.Interfaces;
 namespace Simple_WinScan.Services.Implementations;
 
 /// <summary>
-/// Proveedor de escaneo físico nativo mediante Windows Image Acquisition (WIA) 2.0 en hilo STA dedicado.
+/// Proveedor de escaneo WIA 2.0 nativo ejecutado en un hilo STA dedicado.
+/// Implementa cancelación no bloqueante y reporte cuantitativo de progreso hacia la UI.
 /// </summary>
 public class WiaScannerService : IScannerService
 {
@@ -37,14 +38,17 @@ public class WiaScannerService : IScannerService
             }
             catch (Exception ex)
             {
-                // Si la consulta COM falla por permisos o servicio WIA detenido, reportar lista vacía sin simular
                 System.Diagnostics.Debug.WriteLine($"[WiaScannerService] Error al enumerar escáneres: {ex.Message}");
                 return (IReadOnlyList<ScannerDeviceInfo>)Array.Empty<ScannerDeviceInfo>();
             }
         });
     }
 
-    public Task<ScannedPage> ScanPageAsync(ScannerDeviceInfo? scanner, ScanProfile profile, CancellationToken cancellationToken = default)
+    public Task<ScannedPage> ScanPageAsync(
+        ScannerDeviceInfo? scanner,
+        ScanProfile profile,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (scanner == null)
         {
@@ -57,7 +61,7 @@ public class WiaScannerService : IScannerService
 
             try
             {
-                var (rawBytes, width, height) = _wiaInterop.TransferImage(scanner, profile, cancellationToken);
+                var (rawBytes, width, height) = _wiaInterop.TransferImage(scanner, profile, progress, cancellationToken);
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -85,6 +89,15 @@ public class WiaScannerService : IScannerService
             }
             catch (COMException comEx)
             {
+                // Detectar si fue cancelación solicitada por el usuario o driver abortado
+                if (cancellationToken.IsCancellationRequested ||
+                    comEx.ErrorCode == unchecked((int)0x800704C7) || // ERROR_CANCELLED (0x4C7)
+                    comEx.ErrorCode == unchecked((int)0x80004004) || // E_ABORT
+                    comEx.ErrorCode == unchecked((int)0x80210064))   // WIA_STATUS_WARMING_UP / Cancel error
+                {
+                    throw new OperationCanceledException("La captura fue cancelada por el usuario.", comEx, cancellationToken);
+                }
+
                 // Mapear con precisión HRESULT a mensaje descriptivo en español
                 throw ScannerHardwareException.FromComException(comEx, scanner.Id, scanner.Name);
             }
@@ -94,6 +107,11 @@ public class WiaScannerService : IScannerService
             }
             catch (Exception ex)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException("La captura fue cancelada por el usuario.", ex, cancellationToken);
+                }
+
                 throw new ScannerHardwareException(
                     $"Error inesperado durante la captura con el escáner '{scanner.Name}': {ex.Message}",
                     unchecked((int)0x80004005),
@@ -101,22 +119,61 @@ public class WiaScannerService : IScannerService
                     scanner.Name,
                     ex);
             }
-        });
+        }, cancellationToken);
     }
 
-    private static Task<T> RunInStaAsync<T>(Func<T> func)
+    private static Task<T> RunInStaAsync<T>(Func<T> func, CancellationToken cancellationToken = default)
     {
-        var tcs = new TaskCompletionSource<T>();
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        CancellationTokenRegistration registration = default;
+        if (cancellationToken.CanBeCanceled)
+        {
+            registration = cancellationToken.Register(() =>
+            {
+                tcs.TrySetCanceled(cancellationToken);
+            });
+        }
+
         var thread = new Thread(() =>
         {
             try
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    tcs.TrySetCanceled(cancellationToken);
+                    return;
+                }
+
                 var result = func();
-                tcs.SetResult(result);
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    tcs.TrySetCanceled(cancellationToken);
+                }
+                else
+                {
+                    tcs.TrySetResult(result);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                tcs.TrySetCanceled(cancellationToken);
             }
             catch (Exception ex)
             {
-                tcs.SetException(ex);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    tcs.TrySetCanceled(cancellationToken);
+                }
+                else
+                {
+                    tcs.TrySetException(ex);
+                }
+            }
+            finally
+            {
+                registration.Dispose();
             }
         });
 

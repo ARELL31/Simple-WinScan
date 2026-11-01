@@ -50,6 +50,12 @@ public partial class MainViewModel : ObservableObject
     private bool _isVirtualScannerEnabled;
 
     [ObservableProperty]
+    private int _scanProgressPercentage;
+
+    [ObservableProperty]
+    private bool _isProgressIndeterminate = true;
+
+    [ObservableProperty]
     private string _statusMessage = "Listo para escanear";
 
     [ObservableProperty]
@@ -165,6 +171,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         IsScanning = true;
+        ScanProgressPercentage = 0;
+        IsProgressIndeterminate = true;
         StatusMessage = $"Escaneando página con '{SelectedScanner.Name}'...";
         _scanCts = new CancellationTokenSource();
 
@@ -174,7 +182,14 @@ public partial class MainViewModel : ObservableObject
                 ? (IScannerService)_mockScannerService
                 : _scannerService;
 
-            var scannedPage = await activeService.ScanPageAsync(SelectedScanner, SelectedProfile, _scanCts.Token);
+            var progress = new Progress<int>(percent =>
+            {
+                IsProgressIndeterminate = false;
+                ScanProgressPercentage = percent;
+                StatusMessage = $"Escaneando con '{SelectedScanner.Name}' ({percent}%)...";
+            });
+
+            var scannedPage = await activeService.ScanPageAsync(SelectedScanner, SelectedProfile, progress, _scanCts.Token);
 
             int nextNumber = Pages.Count + 1;
             var itemVm = new ScannedPageItemViewModel(
@@ -194,6 +209,7 @@ public partial class MainViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             StatusMessage = "Escaneo cancelado por el usuario.";
+            ShowNotification("Escaneo Cancelado", "La digitalización fue detenida a petición del usuario.", InfoBarSeverity.Informational);
         }
         catch (ScannerHardwareException ex)
         {
@@ -208,6 +224,8 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsScanning = false;
+            IsProgressIndeterminate = true;
+            ScanProgressPercentage = 0;
             _scanCts?.Dispose();
             _scanCts = null;
         }
@@ -216,10 +234,10 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     public void CancelScan()
     {
-        if (IsScanning && _scanCts != null)
+        if (IsScanning && _scanCts != null && !_scanCts.IsCancellationRequested)
         {
-            _scanCts.Cancel();
             StatusMessage = "Cancelando escaneo...";
+            _scanCts.Cancel();
         }
     }
 

@@ -48,12 +48,16 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Botón Cancelar (solo activo durante escaneo) -->
+                    <!-- Botón Cancelar (solo activo durante escaneo, atajo Escape) -->
                     <Button
                         Command="{x:Bind ViewModel.CancelScanCommand}"
                         Visibility="{x:Bind ViewModel.IsScanning, Mode=OneWay}"
                         Style="{ThemeResource SubtleButtonStyle}"
+                        ToolTipService.ToolTip="Cancelar digitalización en curso (Escape)"
                         Padding="10,8">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="Escape" />
+                        </Button.KeyboardAccelerators>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE711;" FontSize="14" />
                             <TextBlock Text="Cancelar" />
@@ -141,12 +145,15 @@
             </Grid>
         </Border>
 
-        <!-- Fila 2: Barra de Progreso Indeterminada Fluent -->
+        <!-- Fila 2: Barra de Progreso Fluent con Porcentaje Real -->
         <ProgressBar
             Grid.Row="2"
-            IsIndeterminate="True"
+            IsIndeterminate="{x:Bind ViewModel.IsProgressIndeterminate, Mode=OneWay}"
+            Value="{x:Bind ViewModel.ScanProgressPercentage, Mode=OneWay}"
+            Minimum="0"
+            Maximum="100"
             Visibility="{x:Bind GetProgressVisibility(ViewModel.IsScanning, ViewModel.IsExporting), Mode=OneWay}"
-            Height="3"
+            Height="4"
             VerticalAlignment="Top" />
 
         <!-- Fila 3: Lienzo Central -->

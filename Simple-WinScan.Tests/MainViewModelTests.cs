@@ -19,7 +19,7 @@ public class MainViewModelTests
     {
         public bool IsMockMode => false;
         public Func<Task<IReadOnlyList<ScannerDeviceInfo>>>? OnGetAvailableScanners { get; set; }
-        public Func<ScannerDeviceInfo?, ScanProfile, CancellationToken, Task<ScannedPage>>? OnScanPage { get; set; }
+        public Func<ScannerDeviceInfo?, ScanProfile, IProgress<int>?, CancellationToken, Task<ScannedPage>>? OnScanPage { get; set; }
 
         public Task<IReadOnlyList<ScannerDeviceInfo>> GetAvailableScannersAsync()
         {
@@ -27,9 +27,13 @@ public class MainViewModelTests
             return Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo>());
         }
 
-        public Task<ScannedPage> ScanPageAsync(ScannerDeviceInfo? scanner, ScanProfile profile, CancellationToken cancellationToken = default)
+        public Task<ScannedPage> ScanPageAsync(
+            ScannerDeviceInfo? scanner,
+            ScanProfile profile,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
         {
-            if (OnScanPage != null) return OnScanPage(scanner, profile, cancellationToken);
+            if (OnScanPage != null) return OnScanPage(scanner, profile, progress, cancellationToken);
             return Task.FromResult(new ScannedPage { ImageBytes = new byte[] { 1, 2, 3 }, PixelWidth = 100, PixelHeight = 100, Dpi = 300 });
         }
     }
@@ -54,7 +58,7 @@ public class MainViewModelTests
     {
         var fakeScanner = new FakeScannerService
         {
-            OnScanPage = (scanner, profile, ct) =>
+            OnScanPage = (scanner, profile, prog, ct) =>
                 throw new ScannerHardwareException("Fallo en hardware: lámpara bloqueada o atasco de papel.", unchecked((int)0x80210002))
         };
 
@@ -95,6 +99,106 @@ public class MainViewModelTests
         Assert.False(vm.IsScanning);
         Assert.True(vm.CanScan);
         Assert.Contains("reintentar", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ScanAsync_WhenOperationCanceled_PreservesPagesAndDisplaysCancelNotification()
+    {
+        var fakeScanner = new FakeScannerService
+        {
+            OnScanPage = (scanner, profile, prog, ct) =>
+                throw new OperationCanceledException("Operación cancelada por el usuario.")
+        };
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService());
+        var physicalDevice = new ScannerDeviceInfo { Id = "Dev001", Name = "Canon LiDE 300" };
+        vm.AvailableScanners.Add(physicalDevice);
+        vm.SelectedScanner = physicalDevice;
+
+        // Act
+        await vm.ScanAsync();
+
+        // Assert
+        Assert.Empty(vm.Pages);
+        Assert.False(vm.IsScanning);
+        Assert.True(vm.CanScan);
+        Assert.True(vm.IsInfoBarOpen);
+        Assert.Equal(InfoBarSeverity.Informational, vm.InfoBarSeverity);
+        Assert.Equal("Escaneo Cancelado", vm.InfoBarTitle);
+        Assert.Contains("cancelado", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CancelScanCommand_WhenScanning_SetsCancelStatusAndTriggersCancellation()
+    {
+        var tcs = new TaskCompletionSource<ScannedPage>();
+        var fakeScanner = new FakeScannerService
+        {
+            OnScanPage = async (scanner, profile, prog, ct) =>
+            {
+                using (ct.Register(() => tcs.TrySetCanceled()))
+                {
+                    return await tcs.Task;
+                }
+            }
+        };
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService());
+        var physicalDevice = new ScannerDeviceInfo { Id = "Dev001", Name = "Canon LiDE 300" };
+        vm.AvailableScanners.Add(physicalDevice);
+        vm.SelectedScanner = physicalDevice;
+
+        // Iniciar escaneo en segundo plano
+        var scanTask = vm.ScanAsync();
+
+        Assert.True(vm.IsScanning);
+
+        // Act: Cancelar escaneo
+        vm.CancelScan();
+
+        // Esperar resolución
+        await scanTask;
+
+        Assert.Equal("Escaneo cancelado por el usuario.", vm.StatusMessage);
+        Assert.False(vm.IsScanning);
+        Assert.True(vm.CanScan);
+    }
+
+    [Fact]
+    public async Task ScanAsync_UpdatesProgressPercentageAndIndeterminateState()
+    {
+        var progressValues = new List<int>();
+        var fakeScanner = new FakeScannerService
+        {
+            OnScanPage = async (scanner, profile, prog, ct) =>
+            {
+                prog?.Report(35);
+                await Task.Delay(25);
+                prog?.Report(70);
+                await Task.Delay(25);
+                prog?.Report(100);
+                await Task.Delay(25);
+                return new ScannedPage { ImageBytes = new byte[] { 1, 2, 3 }, PixelWidth = 100, PixelHeight = 100 };
+            }
+        };
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService());
+        var physicalDevice = new ScannerDeviceInfo { Id = "Dev001", Name = "Canon LiDE 300" };
+        vm.AvailableScanners.Add(physicalDevice);
+        vm.SelectedScanner = physicalDevice;
+
+        vm.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.ScanProgressPercentage))
+            {
+                progressValues.Add(vm.ScanProgressPercentage);
+            }
+        };
+
+        await vm.ScanAsync();
+
+        Assert.Contains(35, progressValues);
+        Assert.Contains(70, progressValues);
     }
 
     [Fact]
