@@ -8,7 +8,13 @@
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
-    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <Authors>ARELL31</Authors>
+    <Company>ARELL31</Company>
+    <Product>WinSimpleScan</Product>
+    <Copyright>Copyright © 2026 ARELL31</Copyright>
+    <RepositoryUrl>https://github.com/ARELL31/Simple-WinScan</RepositoryUrl>
+    <PublishProfile Condition="'$(Platform)' != '' and '$(Platform)' != 'AnyCPU'">win-$(Platform).pubxml</PublishProfile>
+    <PublishProfile Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">win-AnyCPU.pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>

@@ -25,7 +25,7 @@ public class PdfSharpExportService : IPdfExportService
 
             using var document = new PdfDocument();
             document.Info.Title = "Documento Escaneado - WinSimpleScan";
-            document.Info.Author = "WinSimpleScan";
+            document.Info.Author = "ARELL31 (WinSimpleScan)";
             document.Info.CreationDate = DateTime.Now;
 
             foreach (var page in pages)

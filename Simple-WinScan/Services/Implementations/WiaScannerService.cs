@@ -141,8 +141,8 @@ public class WiaScannerService : IScannerService
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Transferir imagen
-                dynamic dialogType = Type.GetTypeFromProgID("WIA.CommonDialog");
-                dynamic? commonDialog = Activator.CreateInstance(dialogType);
+                var dialogType = Type.GetTypeFromProgID("WIA.CommonDialog");
+                dynamic? commonDialog = dialogType != null ? Activator.CreateInstance(dialogType) : null;
                 dynamic imageFile;
 
                 if (commonDialog != null)
