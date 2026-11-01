@@ -30,3 +30,4 @@ _pkg/
 .superpowers/
 
 publish/
+push-to-github.*
