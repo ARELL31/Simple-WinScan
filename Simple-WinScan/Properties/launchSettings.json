@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Simple-WinScan (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Simple-WinScan (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
