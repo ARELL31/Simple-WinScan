@@ -30,6 +30,15 @@ public partial class App : Application
     /// </summary>
     public App()
     {
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "crash.log");
+                System.IO.File.WriteAllText(logPath, $"[{DateTime.Now}] AppDomain Exception: {e.ExceptionObject}");
+            }
+            catch { }
+        };
         this.InitializeComponent();
         this.UnhandledException += App_UnhandledException;
         Services = ConfigureServices();
