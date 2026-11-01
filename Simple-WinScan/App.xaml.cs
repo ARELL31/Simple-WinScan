@@ -31,7 +31,18 @@ public partial class App : Application
     public App()
     {
         this.InitializeComponent();
+        this.UnhandledException += App_UnhandledException;
         Services = ConfigureServices();
+    }
+
+    private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            var logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "crash.log");
+            System.IO.File.WriteAllText(logPath, $"[{DateTime.Now}] Unhandled Exception: {e.Message}\n{e.Exception}");
+        }
+        catch { }
     }
 
     private static IServiceProvider ConfigureServices()
@@ -54,7 +65,20 @@ public partial class App : Application
     /// </summary>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
+        try
+        {
+            _window = new MainWindow();
+            _window.Activate();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "crash.log");
+                System.IO.File.WriteAllText(logPath, $"[{DateTime.Now}] OnLaunched Exception: {ex.Message}\n{ex}");
+            }
+            catch { }
+            throw;
+        }
     }
 }

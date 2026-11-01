@@ -11,13 +11,12 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        ViewModel = App.GetService<MainViewModel>();
         this.InitializeComponent();
 
         WindowHelper.MainWindow = this;
         this.ExtendsContentIntoTitleBar = true;
         this.SetTitleBar(AppTitleBar);
-
-        ViewModel = App.GetService<MainViewModel>();
 
         this.Activated += MainWindow_Activated;
     }
