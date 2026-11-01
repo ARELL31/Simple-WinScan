@@ -30,6 +30,15 @@ public partial class App : Application
     /// </summary>
     public App()
     {
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "crash.log");
+                System.IO.File.WriteAllText(logPath, $"[{DateTime.Now}] AppDomain Exception: {e.ExceptionObject}");
+            }
+            catch { }
+        };
         this.InitializeComponent();
         this.UnhandledException += App_UnhandledException;
         Services = ConfigureServices();
@@ -50,7 +59,9 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // Servicios del Dominio y Hardware
+        services.AddSingleton<IWiaNativeInterop, DefaultWiaNativeInterop>();
         services.AddSingleton<IScannerService, WiaScannerService>();
+        services.AddSingleton<MockScannerService>();
         services.AddSingleton<IPdfExportService, PdfSharpExportService>();
         services.AddSingleton<IDialogService, WinUiDialogService>();
 

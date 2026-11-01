@@ -121,6 +121,22 @@
                         Padding="8">
                         <FontIcon Glyph="&#xE74D;" FontSize="15" />
                     </Button>
+
+                    <!-- Más Opciones (...) -->
+                    <Button
+                        ToolTipService.ToolTip="Opciones adicionales"
+                        Style="{ThemeResource SubtleButtonStyle}"
+                        Padding="8">
+                        <FontIcon Glyph="&#xE712;" FontSize="15" />
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <ToggleMenuFlyoutItem
+                                    Text="Habilitar escáner virtual (modo simulación)"
+                                    IsChecked="{x:Bind ViewModel.IsVirtualScannerEnabled, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.ToggleVirtualScannerCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

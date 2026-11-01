@@ -8,6 +8,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Controls;
 using Simple_WinScan.Models;
+using Simple_WinScan.Services.Exceptions;
+using Simple_WinScan.Services.Implementations;
 using Simple_WinScan.Services.Interfaces;
 
 namespace Simple_WinScan.ViewModels;
@@ -15,6 +17,7 @@ namespace Simple_WinScan.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly IScannerService _scannerService;
+    private readonly MockScannerService _mockScannerService;
     private readonly IPdfExportService _pdfExportService;
     private readonly IDialogService _dialogService;
     private CancellationTokenSource? _scanCts;
@@ -42,6 +45,9 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanScan))]
     [NotifyPropertyChangedFor(nameof(CanSave))]
     private bool _isExporting;
+
+    [ObservableProperty]
+    private bool _isVirtualScannerEnabled;
 
     [ObservableProperty]
     private string _statusMessage = "Listo para escanear";
@@ -72,8 +78,18 @@ public partial class MainViewModel : ObservableObject
         IScannerService scannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
+        : this(scannerService, new MockScannerService(), pdfExportService, dialogService)
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IDialogService dialogService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
+        _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
         _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
 
@@ -92,17 +108,45 @@ public partial class MainViewModel : ObservableObject
     public async Task LoadScannersAsync()
     {
         AvailableScanners.Clear();
-        var scanners = await _scannerService.GetAvailableScannersAsync();
-        foreach (var scanner in scanners)
+        var physicalScanners = await _scannerService.GetAvailableScannersAsync();
+        foreach (var scanner in physicalScanners)
         {
             AvailableScanners.Add(scanner);
         }
 
-        SelectedScanner = AvailableScanners.FirstOrDefault(s => s.IsDefault) ?? AvailableScanners.FirstOrDefault();
-
-        if (_scannerService.IsMockMode)
+        if (IsVirtualScannerEnabled)
         {
-            ShowNotification("Modo Simulación Activo", "No se detectaron escáneres físicos WIA. Se habilitó el generador de pruebas para simular el escaneo.", InfoBarSeverity.Informational);
+            AvailableScanners.Add(MockScannerService.CreateMockDeviceInfo());
+        }
+
+        if (SelectedScanner == null || !AvailableScanners.Contains(SelectedScanner))
+        {
+            SelectedScanner = AvailableScanners.FirstOrDefault(s => s.IsDefault) ?? AvailableScanners.FirstOrDefault();
+        }
+
+        if (AvailableScanners.Count == 0)
+        {
+            ShowNotification(
+                "Sin escáner físico detectado",
+                "No se detectó ningún escáner WIA conectado. Conecte un escáner USB o active el escáner virtual desde el menú de opciones [...].",
+                InfoBarSeverity.Informational);
+        }
+    }
+
+    [RelayCommand]
+    public async Task ToggleVirtualScannerAsync()
+    {
+        IsVirtualScannerEnabled = !IsVirtualScannerEnabled;
+        await LoadScannersAsync();
+
+        if (IsVirtualScannerEnabled)
+        {
+            SelectedScanner = AvailableScanners.FirstOrDefault(s => s.Id == MockScannerService.MockScannerId);
+            ShowNotification("Modo Simulación Habilitado", "Se ha activado el escáner virtual para pruebas sin hardware.", InfoBarSeverity.Informational);
+        }
+        else
+        {
+            ShowNotification("Modo Simulación Deshabilitado", "Se restauró la lista de escáneres exclusivamente físicos.", InfoBarSeverity.Informational);
         }
     }
 
@@ -111,18 +155,31 @@ public partial class MainViewModel : ObservableObject
     {
         if (IsScanning) return;
 
+        if (SelectedScanner == null)
+        {
+            ShowNotification(
+                "Sin escáner seleccionado",
+                "Por favor seleccione un escáner físico o active el escáner virtual de prueba desde el menú [...].",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
         IsScanning = true;
-        StatusMessage = "Escaneando página...";
+        StatusMessage = $"Escaneando página con '{SelectedScanner.Name}'...";
         _scanCts = new CancellationTokenSource();
 
         try
         {
-            var scannedPage = await _scannerService.ScanPageAsync(SelectedScanner, SelectedProfile, _scanCts.Token);
-            
+            var activeService = (SelectedScanner.Id == MockScannerService.MockScannerId)
+                ? (IScannerService)_mockScannerService
+                : _scannerService;
+
+            var scannedPage = await activeService.ScanPageAsync(SelectedScanner, SelectedProfile, _scanCts.Token);
+
             int nextNumber = Pages.Count + 1;
             var itemVm = new ScannedPageItemViewModel(
-                scannedPage, 
-                nextNumber, 
+                scannedPage,
+                nextNumber,
                 onDeleteRequested: OnPageDeleteRequested,
                 onPageUpdated: UpdatePageSummary);
 
@@ -138,10 +195,15 @@ public partial class MainViewModel : ObservableObject
         {
             StatusMessage = "Escaneo cancelado por el usuario.";
         }
+        catch (ScannerHardwareException ex)
+        {
+            StatusMessage = "Fallo del escáner. Puede reintentar la operación.";
+            ShowNotification("Fallo de Hardware del Escáner", ex.Message, InfoBarSeverity.Error);
+        }
         catch (Exception ex)
         {
-            StatusMessage = "Error al escanear.";
-            ShowNotification("Fallo de Escaneo", ex.Message, InfoBarSeverity.Error);
+            StatusMessage = "Error inesperado durante el escaneo.";
+            ShowNotification("Error de Escaneo", ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
