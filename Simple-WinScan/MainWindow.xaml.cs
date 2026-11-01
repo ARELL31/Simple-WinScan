@@ -1,31 +1,45 @@
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
+using Microsoft.UI.Xaml;
+using Simple_WinScan.Helpers;
+using Simple_WinScan.ViewModels;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+namespace Simple_WinScan;
 
-namespace Simple_WinScan
+public sealed partial class MainWindow : Window
 {
-    /// <summary>
-    /// An empty window that can be used on its own or navigated to within a Frame.
-    /// </summary>
-    public sealed partial class MainWindow : Window
+    public MainViewModel ViewModel { get; }
+
+    public MainWindow()
     {
-        public MainWindow()
-        {
-            InitializeComponent();
-        }
+        this.InitializeComponent();
+
+        WindowHelper.MainWindow = this;
+        this.ExtendsContentIntoTitleBar = true;
+        this.SetTitleBar(AppTitleBar);
+
+        ViewModel = App.GetService<MainViewModel>();
+
+        this.Activated += MainWindow_Activated;
+    }
+
+    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        this.Activated -= MainWindow_Activated;
+        await ViewModel.InitializeAsync();
+    }
+
+    public Visibility GetProgressVisibility(bool isScanning, bool isExporting)
+    {
+        return (isScanning || isExporting) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public Visibility GetEmptyStateVisibility(bool hasPages)
+    {
+        return !hasPages ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public Visibility GetDocumentStateVisibility(bool hasPages)
+    {
+        return hasPages ? Visibility.Visible : Visibility.Collapsed;
     }
 }
