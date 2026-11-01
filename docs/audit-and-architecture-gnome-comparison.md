@@ -53,9 +53,9 @@ Estados posibles:
 | **F05-1** | Rotación individual de página 90° izq/der | `page.vala:120` (`rotate_page`) | [`ScannedPageItemViewModel.cs:33`](file:///C:/Users/cabez/source/repos/Simple-WinScan/Simple-WinScan/ViewModels/ScannedPageItemViewModel.cs#L33) (`RotateLeft/Right`) | **Completo** | Prueba física y de UI | Rota la imagen original y regenera la miniatura en tiempo real. | — |
 | **F05-2** | Recorte predefinido (A4, Carta, 4x6", etc.) | `crop.page` (Presets en headerbar) | N/A | **Ausente** | Inspección estática | No existen opciones ni rectángulos preestablecidos de recorte. | [#7](https://github.com/ARELL31/Simple-WinScan/issues/7) |
 | **F05-3** | Recorte libre interactivo con puntero | `page-view.vala:crop_box` | N/A | **Ausente** | Inspección estática | No hay marco de selección ni manipuladores de redimensionamiento visual. | [#7](https://github.com/ARELL31/Simple-WinScan/issues/7) |
-| **F05-4** | Recorte accesible por teclado | Atajos y ajustes accesibles | N/A | **Ausente** | Inspección estática | Inexistente en la aplicación. | [#7](https://github.com/ARELL31/Simple-WinScan/issues/7) |
-| **F05-5** | Duplicar / Copiar página individual | `app-window.vala` (copia página) | N/A | **Ausente** | Inspección estática | No existe comando para clonar una página escaneada en el documento. | [#8](https://github.com/ARELL31/Simple-WinScan/issues/8) |
-| **F05-6** | Eliminación de página individual | `delete.page` | [`MainViewModel.cs:220`](file:///C:/Users/cabez/source/repos/Simple-WinScan/Simple-WinScan/ViewModels/MainViewModel.cs#L220) (`DeletePage`) | **Completo** | Prueba interactiva en UI | Elimina la página y renumera las restantes. | — |
+| **F05-4** | Ajuste fino del marco de recorte por teclado | Atajos y flechas de dirección | N/A | **Ausente** | Inspección estática | Ajuste accesible paso a paso del rectángulo de recorte sin requerir ratón. | [#7](https://github.com/ARELL31/Simple-WinScan/issues/7) |
+| **F05-5** | Copiar imagen de página al Portapapeles (Ctrl+C) | `app-window.vala:143` (`copy-page`) | N/A | **Ausente** | Inspección estática | Copia el bitmap de la página al portapapeles de Windows (`DataPackage`); GNOME implementa `copy-page` hacia el portapapeles (`Gdk.Clipboard`), no duplicación de página dentro del documento. | [#8](https://github.com/ARELL31/Simple-WinScan/issues/8) |
+| **F05-6** | Eliminación de página individual (Supr) | `delete.page` | [`MainViewModel.cs:220`](file:///C:/Users/cabez/source/repos/Simple-WinScan/Simple-WinScan/ViewModels/MainViewModel.cs#L220) (`DeletePage`) | **Completo** | Prueba interactiva en UI | Elimina la página seleccionada y renumera las restantes. | — |
 | **F06-1** | Reordenar páginas individualmente (izq/der) | `app-window.vala:move_page` | [`MainViewModel.cs:176`](file:///C:/Users/cabez/source/repos/Simple-WinScan/Simple-WinScan/ViewModels/MainViewModel.cs#L176) (`MoveLeft/Right`) | **Completo** | Prueba interactiva en UI | Permite reordenar la posición de la página activa en el documento. | — |
 | **F06-2** | Invertir orden del documento (Reverse) | `reorder-pages-dialog.vala:54` | N/A | **Ausente** | Inspección estática | Inexistente en ViewModel y UI. | [#8](https://github.com/ARELL31/Simple-WinScan/issues/8) |
 | **F06-3** | Intercalado de caras (Collate dúplex) | `reorder-pages-dialog.vala:46` | N/A | **Ausente** | Inspección estática | Vital para escáneres ADF de una sola cara (frente luego dorso). | [#8](https://github.com/ARELL31/Simple-WinScan/issues/8) |
@@ -85,7 +85,8 @@ Estados posibles:
 | Clase / Contrato | Qué se conserva | Qué cambia | Responsabilidad | Brecha que resuelve |
 | :--- | :--- | :--- | :--- | :--- |
 | `IScannerService` | Métodos base de consulta | Se expande con eventos de progreso, capacidades, modo ADF y cancelación no bloqueante | Contrato de abstracción de hardware desacoplado de la UI | F01-2, F02-4, F02-5, F03-2, F04-4 |
-| `WiaScannerService` | Llamadas STA COM WIA 2.0 y simulación aislada | Eliminación de swallow de excepciones; soporte para ciclo ADF multi-item; cancelación asíncrona real; introspección de propiedades | Implementación de driver WIA 2.0 y emulador mock explícito | F02-6, F03-2, F03-3, F04-4 |
+| `WiaScannerService` | Llamadas STA COM WIA 2.0 | Eliminación de swallow de excepciones; reporte fiel de errores de hardware (anti-falso éxito); eliminación total de generación de páginas mock | Driver WIA 2.0 nativo exclusivo para dispositivos físicos | F02-6, F03-2, F03-3, F04-4 |
+| `MockScannerService` *(Separado)* | N/A | Generador sintético desacoplado en memoria de páginas de prueba (A4, 300/600 DPI, Texto/Color) | Emulador de escáner explícito y aislado para desarrollo y pruebas sin hardware | F01-5 |
 | `MainViewModel` | Inyección de dependencias y comandos básicos | Gestión de estados de hardware, soporte de operaciones por lote, estado de documento sucio (`IsDirty`), integración de recorte | Orquestador de la aplicación y enlace con vistas | F01-2, F03-1, F03-2, F09-1, F09-2 |
 | `ScannedPageItemViewModel`| Rotación y eliminación | Coordenadas de recorte (`CropRectangle`), duplicación y estado de selección | Representación de miniatura y edición contextual de página | F05-2, F05-3, F05-5 |
 | `ScannedPage` | Bytes brutos y metadatos DPI | Almacenamiento desacoplado en disco temporal (caché de bajo consumo de RAM), soporte de recorte no destructivo | Entidad del dominio de página | F05-3, F09-3, F10-2 |
@@ -125,6 +126,7 @@ graph TD
 
     subgraph Impl_Layer ["Implementaciones Concretas"]
         WIA["WiaScannerService (COM STA)"]
+        MOCK["MockScannerService (Simulador Explícito)"]
         PDFS["PdfSharpExportService"]
         IMGS["ImageSharpExportService"]
         PRTS["WindowsPrintService"]
@@ -134,7 +136,7 @@ graph TD
 
     subgraph Storage_Hardware ["Hardware y Almacenamiento"]
         COM["WIA 2.0 Drivers (Hardware Físico)"]
-        MOCK["Mock Data Generator (Simulación)"]
+        SYNTH["Generador Sintético en Memoria (ImageSharp)"]
         FS["Sistema de Archivos / Cache Temporal"]
         WINPRT["Windows Print Spooler"]
     end
@@ -145,6 +147,7 @@ graph TD
     RPD --> MVM
 
     MVM --> ISS
+    MVM -.-> MOCK
     MVM --> IPDF
     MVM --> IIMG
     MVM --> IPRT
@@ -152,6 +155,7 @@ graph TD
     MVM --> IDLG
 
     ISS -.-> WIA
+    ISS -.-> MOCK
     IPDF -.-> PDFS
     IIMG -.-> IMGS
     IPRT -.-> PRTS
@@ -159,7 +163,7 @@ graph TD
     IDLG -.-> DLGS
 
     WIA --> COM
-    WIA --> MOCK
+    MOCK --> SYNTH
     PDFS --> FS
     IMGS --> FS
     AUTOS --> FS

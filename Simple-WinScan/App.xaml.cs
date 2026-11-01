@@ -50,7 +50,9 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // Servicios del Dominio y Hardware
+        services.AddSingleton<IWiaNativeInterop, DefaultWiaNativeInterop>();
         services.AddSingleton<IScannerService, WiaScannerService>();
+        services.AddSingleton<MockScannerService>();
         services.AddSingleton<IPdfExportService, PdfSharpExportService>();
         services.AddSingleton<IDialogService, WinUiDialogService>();
 
