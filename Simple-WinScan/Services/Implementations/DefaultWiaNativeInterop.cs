@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 using Simple_WinScan.Models;
 using Simple_WinScan.Services.Exceptions;
@@ -62,9 +64,14 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
         return result;
     }
 
-    public (byte[] RawBytes, int Width, int Height) TransferImage(ScannerDeviceInfo scanner, ScanProfile profile, CancellationToken cancellationToken)
+    public (byte[] RawBytes, int Width, int Height) TransferImage(
+        ScannerDeviceInfo scanner,
+        ScanProfile profile,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Report(0);
 
         var devMgrType = Type.GetTypeFromProgID("WIA.DeviceManager");
         if (devMgrType == null)
@@ -107,25 +114,84 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Transferir imagen mediante WIA
+        // 1. Intentar transferencia WIA 2.0 basada en flujo asíncrono con IWiaTransfer
+        if (item is IWiaTransfer wiaTransfer)
+        {
+            using var reg = cancellationToken.Register(() =>
+            {
+                try { wiaTransfer.Cancel(); } catch { }
+            });
+
+            var callback = new ManagedWiaTransferCallback(progress, cancellationToken, wiaTransfer);
+            int hr = wiaTransfer.Download(0, callback);
+
+            if (cancellationToken.IsCancellationRequested || hr == unchecked((int)0x800704C7) || hr == unchecked((int)0x80004004))
+            {
+                throw new OperationCanceledException("La captura fue cancelada por el usuario.", cancellationToken);
+            }
+
+            if (hr != 0)
+            {
+                throw new COMException("Fallo en la descarga de imagen WIA.", hr);
+            }
+
+            if (callback.Stream != null)
+            {
+                byte[] bytes = ReadStreamToBytes(callback.Stream);
+                progress?.Report(100);
+
+                int w = (int)(8.27 * profile.Dpi);
+                int h = (int)(11.69 * profile.Dpi);
+                return (bytes, w, h);
+            }
+        }
+
+        // 2. Ruta alternativa mediante WIA Automation con reporte de cancelación
+        progress?.Report(20);
         var dialogType = Type.GetTypeFromProgID("WIA.CommonDialog");
         dynamic? commonDialog = dialogType != null ? Activator.CreateInstance(dialogType) : null;
         dynamic imageFile;
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (commonDialog != null)
         {
-            imageFile = commonDialog.ShowTransfer(item, WiaPngFormatGuid, false);
+            // CancelError = true para que el diálogo WIA lance COMException ante cancelación
+            imageFile = commonDialog.ShowTransfer(item, WiaPngFormatGuid, true);
         }
         else
         {
             imageFile = item.Transfer(WiaPngFormatGuid);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+        progress?.Report(100);
+
         byte[] rawBytes = imageFile.FileData?.BinaryData is byte[] data ? data : Array.Empty<byte>();
         int width = (int)imageFile.Width;
         int height = (int)imageFile.Height;
 
         return (rawBytes, width, height);
+    }
+
+    private static byte[] ReadStreamToBytes(IStream stream)
+    {
+        stream.Stat(out var statstg, 1);
+        int size = (int)statstg.cbSize;
+        byte[] buffer = new byte[size];
+
+        stream.Seek(0, 0, IntPtr.Zero);
+        IntPtr pcbRead = Marshal.AllocHGlobal(sizeof(int));
+        try
+        {
+            stream.Read(buffer, size, pcbRead);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(pcbRead);
+        }
+
+        return buffer;
     }
 
     private static void SetWiaProperty(dynamic properties, int propId, object value)
@@ -169,4 +235,89 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
         }
         return null;
     }
+
+    #region Definiciones COM WIA 2.0 para IWiaTransfer e IWiaTransferCallback
+
+    [DllImport("ole32.dll", PreserveSig = false)]
+    private static extern void CreateStreamOnHGlobal(IntPtr hGlobal, bool fDeleteOnRelease, out IStream ppstm);
+
+    [ComImport]
+    [Guid("c39d6942-2f4e-4d04-92fe-4ef4d3a1de5a")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IWiaTransfer
+    {
+        [PreserveSig]
+        int Download(int lFlags, [MarshalAs(UnmanagedType.Interface)] IWiaTransferCallback pIWiaTransferCallback);
+
+        [PreserveSig]
+        int Upload(int lFlags, [MarshalAs(UnmanagedType.Interface)] IStream pSource, [MarshalAs(UnmanagedType.Interface)] IWiaTransferCallback pIWiaTransferCallback);
+
+        [PreserveSig]
+        int Cancel();
+
+        [PreserveSig]
+        int EnumWIA_FORMAT_INFO(out IntPtr ppEnum);
+    }
+
+    [ComImport]
+    [Guid("27d4eaaf-28a6-4ca5-9aab-e678168b9527")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IWiaTransferCallback
+    {
+        [PreserveSig]
+        int TransferCallback(int lFlags, ref WiaTransferParams pWiaTransferParams);
+
+        [PreserveSig]
+        int GetNextStream(int lFlags, [MarshalAs(UnmanagedType.BStr)] string bstrItemName, [MarshalAs(UnmanagedType.BStr)] string bstrFullItemName, out IStream ppDestination);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WiaTransferParams
+    {
+        public int lMessage;
+        public int lPercentComplete;
+        public ulong ulTransferredBytes;
+        public int hrErrorStatus;
+    }
+
+    private class ManagedWiaTransferCallback : IWiaTransferCallback
+    {
+        private readonly IProgress<int>? _progress;
+        private readonly CancellationToken _cancellationToken;
+        private readonly IWiaTransfer? _wiaTransfer;
+        public IStream? Stream { get; private set; }
+
+        public ManagedWiaTransferCallback(IProgress<int>? progress, CancellationToken cancellationToken, IWiaTransfer? wiaTransfer)
+        {
+            _progress = progress;
+            _cancellationToken = cancellationToken;
+            _wiaTransfer = wiaTransfer;
+        }
+
+        public int TransferCallback(int lFlags, ref WiaTransferParams pWiaTransferParams)
+        {
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                _wiaTransfer?.Cancel();
+                return unchecked((int)0x800704C7); // ERROR_CANCELLED
+            }
+
+            if (pWiaTransferParams.lPercentComplete >= 0 && pWiaTransferParams.lPercentComplete <= 100)
+            {
+                _progress?.Report(pWiaTransferParams.lPercentComplete);
+            }
+
+            return 0; // S_OK
+        }
+
+        public int GetNextStream(int lFlags, string bstrItemName, string bstrFullItemName, out IStream ppDestination)
+        {
+            CreateStreamOnHGlobal(IntPtr.Zero, true, out var stream);
+            Stream = stream;
+            ppDestination = stream;
+            return 0; // S_OK
+        }
+    }
+
+    #endregion
 }

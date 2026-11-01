@@ -36,12 +36,21 @@ public class MockScannerService : IScannerService
         return Task.FromResult(list);
     }
 
-    public async Task<ScannedPage> ScanPageAsync(ScannerDeviceInfo? scanner, ScanProfile profile, CancellationToken cancellationToken = default)
+    public async Task<ScannedPage> ScanPageAsync(
+        ScannerDeviceInfo? scanner,
+        ScanProfile profile,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Simular latencia realista de escaneo (1.5 segundos)
-        await Task.Delay(1500, cancellationToken);
+        // Simular progreso cuantitativo progresivo y latencia de adquisición
+        for (int p = 0; p <= 100; p += 20)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(p);
+            await Task.Delay(120, cancellationToken).ConfigureAwait(false);
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -90,49 +99,48 @@ public class MockScannerService : IScannerService
             }
         }
 
-        // Fondo
+        // Fondo del documento
         FillRect(0, 0, width, height, paperBg);
 
-        // Borde decorativo
-        FillRect(20, 20, width - 40, 2, secondaryInk);
-        FillRect(20, height - 22, width - 40, 2, secondaryInk);
-        FillRect(20, 20, 2, height - 40, secondaryInk);
-        FillRect(width - 22, 20, 2, height - 40, secondaryInk);
+        int marginX = (int)(0.8 * dpi);
+        int marginY = (int)(0.8 * dpi);
 
         // Encabezado
-        FillRect(60, 60, width - 120, 32, inkColor);
+        FillRect(marginX, marginY, (int)(4.0 * dpi), (int)(0.22 * dpi), inkColor);
+        FillRect(marginX, marginY + (int)(0.35 * dpi), (int)(2.5 * dpi), (int)(0.08 * dpi), secondaryInk);
 
-        // Marca de agua o badge de simulación
-        FillRect(60, 105, 300, 16, secondaryInk);
+        // Separador horizontal
+        FillRect(marginX, marginY + (int)(0.6 * dpi), width - (2 * marginX), 4, secondaryInk);
 
-        // Bloques de texto simulados
-        int currentY = 160;
-        var rand = new Random(42);
-        while (currentY < height - 150)
+        // Párrafos simulados
+        int currentY = marginY + (int)(0.9 * dpi);
+        for (int p = 0; p < 7; p++)
         {
-            int lineWidth = rand.Next(width - 240, width - 130);
-            FillRect(60, currentY, lineWidth, 10, inkColor);
-            currentY += 26;
-
-            if (rand.NextDouble() > 0.85)
+            int linesInParagraph = 4 + (p % 3);
+            for (int line = 0; line < linesInParagraph; line++)
             {
-                currentY += 18;
+                int lineWidth = (line == linesInParagraph - 1)
+                    ? (int)((3.0 + (p % 2)) * dpi)
+                    : width - (2 * marginX);
+
+                FillRect(marginX, currentY, lineWidth, (int)(0.045 * dpi), inkColor);
+                currentY += (int)(0.11 * dpi);
             }
+            currentY += (int)(0.25 * dpi);
         }
 
-        // Pie de página
-        FillRect(60, height - 80, 180, 8, secondaryInk);
-        FillRect(width - 160, height - 80, 100, 8, secondaryInk);
+        // Marca de agua sutil en pie de página indicando modo simulación
+        FillRect(marginX, height - marginY, (int)(3.5 * dpi), 2, secondaryInk);
 
-        using var ms = new MemoryStream();
-        image.SaveAsPng(ms);
+        using var memoryStream = new MemoryStream();
+        image.SaveAsPng(memoryStream);
 
         return new ScannedPage
         {
-            ImageBytes = ms.ToArray(),
+            ImageBytes = memoryStream.ToArray(),
             PixelWidth = width,
             PixelHeight = height,
-            Dpi = profile.Dpi,
+            Dpi = dpi,
             RotationAngle = 0
         };
     }
