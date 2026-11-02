@@ -68,6 +68,7 @@ public partial class App : Application
         services.AddSingleton<IPrintService, SystemDrawingPrintService>();
         services.AddSingleton<ISystemIntegrationService, WindowsSystemIntegrationService>();
         services.AddSingleton<IAutosaveService, JsonAutosaveService>();
+        services.AddSingleton<IPostprocessingService, CommandPostprocessingService>();
         services.AddSingleton<IDialogService, WinUiDialogService>();
 
         // ViewModels

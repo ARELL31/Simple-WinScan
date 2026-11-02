@@ -27,6 +27,7 @@ public partial class MainViewModel : ObservableObject
     private readonly IPrintService _printService;
     private readonly ISystemIntegrationService _systemService;
     private readonly IAutosaveService _autosaveService;
+    private readonly IPostprocessingService _postprocessingService;
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private CancellationTokenSource? _scanCts;
@@ -182,6 +183,21 @@ public partial class MainViewModel : ObservableObject
         IAutosaveService autosaveService,
         IDialogService dialogService,
         ISettingsService settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, imageExportService, printService, systemService, autosaveService, new CommandPostprocessingService(), dialogService, settingsService)
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IImageExportService imageExportService,
+        IPrintService printService,
+        ISystemIntegrationService systemService,
+        IAutosaveService autosaveService,
+        IPostprocessingService postprocessingService,
+        IDialogService dialogService,
+        ISettingsService settingsService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
         _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
@@ -190,6 +206,7 @@ public partial class MainViewModel : ObservableObject
         _printService = printService ?? throw new ArgumentNullException(nameof(printService));
         _systemService = systemService ?? throw new ArgumentNullException(nameof(systemService));
         _autosaveService = autosaveService ?? throw new ArgumentNullException(nameof(autosaveService));
+        _postprocessingService = postprocessingService ?? throw new ArgumentNullException(nameof(postprocessingService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
@@ -537,6 +554,22 @@ public partial class MainViewModel : ObservableObject
 
     public async Task AddAcquiredPageAsync(ScannedPage scannedPage)
     {
+        try
+        {
+            var settings = await _settingsService.LoadSettingsAsync();
+            if (settings.IsPostprocessingEnabled && !string.IsNullOrWhiteSpace(settings.PostprocessingCommand))
+            {
+                StatusMessage = "Aplicando posprocesamiento externo...";
+                await _postprocessingService.ProcessPageAsync(scannedPage, settings.PostprocessingCommand);
+                StatusMessage = "Posprocesamiento completado.";
+            }
+        }
+        catch (Exception)
+        {
+            StatusMessage = "Posprocesamiento falló; se conserva imagen original.";
+            ShowNotification("Posprocesamiento externo", "El comando falló, pero se conservó la imagen original escaneada.", InfoBarSeverity.Warning);
+        }
+
         int nextNumber = Pages.Count + 1;
         var itemVm = new ScannedPageItemViewModel(
             scannedPage,
@@ -758,6 +791,23 @@ public partial class MainViewModel : ObservableObject
     public void RotateSelectedRight()
     {
         SelectedPage?.RotateClockwise();
+    }
+
+    [RelayCommand]
+    public async Task RevertSelectedPageToOriginalAsync()
+    {
+        if (SelectedPage == null) return;
+        bool reverted = await _postprocessingService.RevertToOriginalAsync(SelectedPage.Model);
+        if (reverted)
+        {
+            await SelectedPage.InitializeThumbnailAsync();
+            OnPageModified();
+            ShowNotification("Página Revertida", "Se ha restaurado la imagen original escaneada.", InfoBarSeverity.Success);
+        }
+        else
+        {
+            ShowNotification("Reversión no disponible", "La página no cuenta con una versión previa modificada.", InfoBarSeverity.Informational);
+        }
     }
 
     [RelayCommand]
