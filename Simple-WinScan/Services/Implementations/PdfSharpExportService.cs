@@ -8,14 +8,24 @@ using PdfSharpCore.Pdf;
 using Simple_WinScan.Helpers;
 using Simple_WinScan.Models;
 using Simple_WinScan.Services.Interfaces;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Processing;
 
 namespace Simple_WinScan.Services.Implementations;
 
 public class PdfSharpExportService : IPdfExportService
 {
+    private readonly IOcrService? _ocrService;
+
+    public PdfSharpExportService(IOcrService? ocrService = null)
+    {
+        _ocrService = ocrService;
+    }
+
     public Task ExportPagesToPdfAsync(IReadOnlyList<ScannedPage> pages, Stream outputStream, CancellationToken cancellationToken = default)
+    {
+        return ExportPagesToPdfAsync(pages, outputStream, false, cancellationToken);
+    }
+
+    public Task ExportPagesToPdfAsync(IReadOnlyList<ScannedPage> pages, Stream outputStream, bool enableOcr, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
@@ -50,6 +60,40 @@ public class PdfSharpExportService : IPdfExportService
 
                 using var gfx = XGraphics.FromPdfPage(pdfPage);
                 gfx.DrawImage(xImage, 0, 0, widthPoints, heightPoints);
+
+                if (enableOcr && _ocrService != null && _ocrService.IsOcrSupported)
+                {
+                    try
+                    {
+                        var ocrResult = _ocrService.RecognizeTextAsync(finalBytes, cancellationToken).GetAwaiter().GetResult();
+                        if (ocrResult != null && ocrResult.Words.Count > 0)
+                        {
+                            double scaleX = widthPoints / xImage.PixelWidth;
+                            double scaleY = heightPoints / xImage.PixelHeight;
+
+                            var transparentBrush = new XSolidBrush(XColor.FromArgb(0, 0, 0, 0));
+
+                            foreach (var word in ocrResult.Words)
+                            {
+                                double wordX = word.X * scaleX;
+                                double wordY = word.Y * scaleY;
+                                double wordW = word.Width * scaleX;
+                                double wordH = word.Height * scaleY;
+
+                                double fontSize = Math.Max(6, wordH * 0.85);
+                                var fontOptions = new XPdfFontOptions(PdfFontEncoding.WinAnsi);
+                                var font = new XFont("Arial", fontSize, XFontStyle.Regular, fontOptions);
+
+                                var rect = new XRect(wordX, wordY, Math.Max(wordW, 20), Math.Max(wordH, fontSize));
+                                gfx.DrawString(word.Text, font, transparentBrush, rect, XStringFormats.TopLeft);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Si falla OCR para una página, continúa conservando la imagen sin error fatal
+                    }
+                }
             }
 
             cancellationToken.ThrowIfCancellationRequested();

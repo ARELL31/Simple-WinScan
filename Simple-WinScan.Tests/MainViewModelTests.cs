@@ -61,6 +61,11 @@ public class MainViewModelTests
         {
             return Task.CompletedTask;
         }
+
+        public Task ExportPagesToPdfAsync(IReadOnlyList<ScannedPage> pages, Stream outputStream, bool enableOcr, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private class FakeDialogService : IDialogService

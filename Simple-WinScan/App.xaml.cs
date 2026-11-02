@@ -63,6 +63,7 @@ public partial class App : Application
         services.AddSingleton<IWiaNativeInterop, DefaultWiaNativeInterop>();
         services.AddSingleton<IScannerService, WiaScannerService>();
         services.AddSingleton<MockScannerService>();
+        services.AddSingleton<IOcrService, WindowsMediaOcrService>();
         services.AddSingleton<IPdfExportService, PdfSharpExportService>();
         services.AddSingleton<IImageExportService, ImageSharpExportService>();
         services.AddSingleton<IPrintService, SystemDrawingPrintService>();

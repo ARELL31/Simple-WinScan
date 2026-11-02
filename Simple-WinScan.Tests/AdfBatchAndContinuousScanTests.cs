@@ -78,6 +78,7 @@ public class AdfBatchAndContinuousScanTests
     private class FakePdfExportService : IPdfExportService
     {
         public Task ExportPagesToPdfAsync(IReadOnlyList<ScannedPage> pages, Stream outputStream, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ExportPagesToPdfAsync(IReadOnlyList<ScannedPage> pages, Stream outputStream, bool enableOcr, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private class FakeDialogService : IDialogService

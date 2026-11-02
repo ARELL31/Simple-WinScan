@@ -627,9 +627,10 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
+            var settings = await _settingsService.LoadSettingsAsync();
             var rawPages = Pages.Select(p => p.Model).ToList();
             using var fileStream = File.Create(targetPath);
-            await _pdfExportService.ExportPagesToPdfAsync(rawPages, fileStream);
+            await _pdfExportService.ExportPagesToPdfAsync(rawPages, fileStream, settings.IsOcrEnabled);
 
             IsDirty = false;
             _ = _autosaveService.ClearSessionAsync();
