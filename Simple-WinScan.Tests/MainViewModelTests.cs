@@ -53,6 +53,18 @@ public class MainViewModelTests
         public Task<bool> ShowConfirmationAsync(string title, string message, string confirmText, string cancelText) => Task.FromResult(true);
     }
 
+    private class FakeSettingsService : ISettingsService
+    {
+        public AppSettings CurrentSettings { get; set; } = new();
+
+        public Task<AppSettings> LoadSettingsAsync() => Task.FromResult(CurrentSettings);
+        public Task SaveSettingsAsync(AppSettings settings)
+        {
+            CurrentSettings = settings;
+            return Task.CompletedTask;
+        }
+    }
+
     [Fact]
     public async Task ScanAsync_WhenScannerHardwareExceptionThrown_PreservesPagesCollectionAndEnablesRetry()
     {
@@ -243,5 +255,73 @@ public class MainViewModelTests
         Assert.Equal(InfoBarSeverity.Warning, vm.InfoBarSeverity);
         Assert.Equal("Sin escáner seleccionado", vm.InfoBarTitle);
         Assert.Empty(vm.Pages);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenSavedScannerExists_PreselectsSavedScanner()
+    {
+        var scanner1 = new ScannerDeviceInfo { Id = "DEV_A", Name = "Scanner A" };
+        var scanner2 = new ScannerDeviceInfo { Id = "DEV_B", Name = "Scanner B" };
+        var fakeScanner = new FakeScannerService
+        {
+            OnGetAvailableScanners = () => Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo> { scanner1, scanner2 })
+        };
+        var fakeSettings = new FakeSettingsService
+        {
+            CurrentSettings = new AppSettings { LastSelectedScannerId = "DEV_B" }
+        };
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService(), fakeSettings);
+        await vm.InitializeAsync();
+
+        Assert.NotNull(vm.SelectedScanner);
+        Assert.Equal("DEV_B", vm.SelectedScanner.Id);
+    }
+
+    [Fact]
+    public async Task SelectedScanner_WhenChanged_SavesToSettings()
+    {
+        var scanner1 = new ScannerDeviceInfo { Id = "DEV_A", Name = "Scanner A" };
+        var scanner2 = new ScannerDeviceInfo { Id = "DEV_B", Name = "Scanner B" };
+        var fakeScanner = new FakeScannerService
+        {
+            OnGetAvailableScanners = () => Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo> { scanner1, scanner2 })
+        };
+        var fakeSettings = new FakeSettingsService();
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService(), fakeSettings);
+        await vm.InitializeAsync();
+
+        vm.SelectedScanner = scanner2;
+
+        Assert.Equal("DEV_B", fakeSettings.CurrentSettings.LastSelectedScannerId);
+    }
+
+    [Fact]
+    public async Task LoadScannersAsync_HotRefresh_PreservesCurrentSelectionIfStillPresent()
+    {
+        var scanner1 = new ScannerDeviceInfo { Id = "DEV_A", Name = "Scanner A" };
+        var scanner2 = new ScannerDeviceInfo { Id = "DEV_B", Name = "Scanner B" };
+        var currentList = new List<ScannerDeviceInfo> { scanner1, scanner2 };
+
+        var fakeScanner = new FakeScannerService
+        {
+            OnGetAvailableScanners = () => Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(currentList)
+        };
+        var fakeSettings = new FakeSettingsService();
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService(), fakeSettings);
+        await vm.InitializeAsync();
+        vm.SelectedScanner = scanner2;
+
+        // Simular que se conecta un tercer escáner por USB (hot-plug)
+        var scanner3 = new ScannerDeviceInfo { Id = "DEV_C", Name = "Scanner C" };
+        currentList.Add(scanner3);
+
+        await vm.LoadScannersAsync();
+
+        Assert.Equal(3, vm.AvailableScanners.Count);
+        Assert.NotNull(vm.SelectedScanner);
+        Assert.Equal("DEV_B", vm.SelectedScanner.Id);
     }
 }

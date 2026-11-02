@@ -20,6 +20,7 @@ public partial class MainViewModel : ObservableObject
     private readonly MockScannerService _mockScannerService;
     private readonly IPdfExportService _pdfExportService;
     private readonly IDialogService _dialogService;
+    private readonly ISettingsService _settingsService;
     private CancellationTokenSource? _scanCts;
 
     public ObservableCollection<ScannedPageItemViewModel> Pages { get; } = new();
@@ -84,7 +85,7 @@ public partial class MainViewModel : ObservableObject
         IScannerService scannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, new MockScannerService(), pdfExportService, dialogService)
+        : this(scannerService, new MockScannerService(), pdfExportService, dialogService, new JsonSettingsService())
     {
     }
 
@@ -93,11 +94,22 @@ public partial class MainViewModel : ObservableObject
         MockScannerService mockScannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
+        : this(scannerService, mockScannerService, pdfExportService, dialogService, new JsonSettingsService())
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IDialogService dialogService,
+        ISettingsService settingsService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
         _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
         _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
         // Inicializar perfiles estándar
         AvailableProfiles.Add(ScanProfile.TextDefault);
@@ -107,12 +119,20 @@ public partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        await LoadScannersAsync();
+        var settings = await _settingsService.LoadSettingsAsync();
+        IsVirtualScannerEnabled = settings.IsVirtualScannerEnabled;
+        await LoadScannersAsync(savedScannerId: settings.LastSelectedScannerId);
     }
 
     [RelayCommand]
     public async Task LoadScannersAsync()
     {
+        await LoadScannersAsync(savedScannerId: null);
+    }
+
+    public async Task LoadScannersAsync(string? savedScannerId)
+    {
+        var previousSelectionId = SelectedScanner?.Id ?? savedScannerId;
         AvailableScanners.Clear();
         var physicalScanners = await _scannerService.GetAvailableScannersAsync();
         foreach (var scanner in physicalScanners)
@@ -123,6 +143,11 @@ public partial class MainViewModel : ObservableObject
         if (IsVirtualScannerEnabled)
         {
             AvailableScanners.Add(MockScannerService.CreateMockDeviceInfo());
+        }
+
+        if (!string.IsNullOrEmpty(previousSelectionId))
+        {
+            SelectedScanner = AvailableScanners.FirstOrDefault(s => s.Id == previousSelectionId);
         }
 
         if (SelectedScanner == null || !AvailableScanners.Contains(SelectedScanner))
@@ -139,10 +164,37 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    partial void OnSelectedScannerChanged(ScannerDeviceInfo? value)
+    {
+        if (value != null)
+        {
+            _ = SaveSelectedScannerSettingAsync(value.Id);
+        }
+    }
+
+    private async Task SaveSelectedScannerSettingAsync(string scannerId)
+    {
+        try
+        {
+            var settings = await _settingsService.LoadSettingsAsync();
+            settings.LastSelectedScannerId = scannerId;
+            await _settingsService.SaveSettingsAsync(settings);
+        }
+        catch { }
+    }
+
     [RelayCommand]
     public async Task ToggleVirtualScannerAsync()
     {
         IsVirtualScannerEnabled = !IsVirtualScannerEnabled;
+        try
+        {
+            var settings = await _settingsService.LoadSettingsAsync();
+            settings.IsVirtualScannerEnabled = IsVirtualScannerEnabled;
+            await _settingsService.SaveSettingsAsync(settings);
+        }
+        catch { }
+
         await LoadScannersAsync();
 
         if (IsVirtualScannerEnabled)

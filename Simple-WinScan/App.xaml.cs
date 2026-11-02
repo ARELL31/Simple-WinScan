@@ -59,6 +59,7 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // Servicios del Dominio y Hardware
+        services.AddSingleton<ISettingsService, JsonSettingsService>();
         services.AddSingleton<IWiaNativeInterop, DefaultWiaNativeInterop>();
         services.AddSingleton<IScannerService, WiaScannerService>();
         services.AddSingleton<MockScannerService>();

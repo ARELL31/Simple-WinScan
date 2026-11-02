@@ -86,9 +86,13 @@
 
                     <Button
                         Command="{x:Bind ViewModel.LoadScannersCommand}"
-                        ToolTipService.ToolTip="Buscar escáneres conectados"
+                        ToolTipService.ToolTip="Actualizar lista de escáneres (F5)"
+                        AutomationProperties.Name="Actualizar lista de escáneres"
                         Style="{ThemeResource SubtleButtonStyle}"
                         Padding="8">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F5" />
+                        </Button.KeyboardAccelerators>
                         <FontIcon Glyph="&#xE72C;" FontSize="14" />
                     </Button>
                 </StackPanel>
