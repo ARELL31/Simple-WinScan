@@ -1,0 +1,67 @@
+<UserControl
+    x:Class="Simple_WinScan.Controls.CropOverlayControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Simple_WinScan.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    IsTabStop="True">
+
+    <Grid x:Name="RootGrid" Background="Transparent" KeyDown="OnKeyDown" PointerPressed="OnPointerPressed" PointerMoved="OnPointerMoved" PointerReleased="OnPointerReleased">
+        <!-- Marco de Selección de Recorte -->
+        <Canvas x:Name="CropCanvas">
+            <Border
+                x:Name="CropBoxBorder"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                BorderThickness="2"
+                Background="#200078D4">
+                
+                <!-- Guías de regla de tercios -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="#40FFFFFF" BorderThickness="0,1,0,1" />
+                    <Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="#40FFFFFF" BorderThickness="1,0,1,0" />
+                </Grid>
+            </Border>
+
+            <!-- Asas en las 4 esquinas -->
+            <Border x:Name="HandleTopLeft" Width="12" Height="12" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2" />
+            <Border x:Name="HandleTopRight" Width="12" Height="12" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2" />
+            <Border x:Name="HandleBottomLeft" Width="12" Height="12" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2" />
+            <Border x:Name="HandleBottomRight" Width="12" Height="12" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2" />
+        </Canvas>
+
+        <!-- Barra flotante de Presets y Acciones -->
+        <Border
+            HorizontalAlignment="Center"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,8"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="6,4">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Button Click="OnPresetA4Clicked" Content="A4" Style="{ThemeResource SubtleButtonStyle}" Padding="6,2" FontSize="11" ToolTipService.ToolTip="Proporción A4" />
+                <Button Click="OnPresetLetterClicked" Content="Carta" Style="{ThemeResource SubtleButtonStyle}" Padding="6,2" FontSize="11" ToolTipService.ToolTip="Proporción Carta" />
+                <Button Click="OnPresetPhotoClicked" Content="4x6&quot;" Style="{ThemeResource SubtleButtonStyle}" Padding="6,2" FontSize="11" ToolTipService.ToolTip="Foto 4x6" />
+                <Button Click="OnPresetCardClicked" Content="Tarjeta" Style="{ThemeResource SubtleButtonStyle}" Padding="6,2" FontSize="11" ToolTipService.ToolTip="Tarjeta de presentación" />
+                <AppBarSeparator />
+                <Button Click="OnResetClicked" ToolTipService.ToolTip="Quitar recorte" Style="{ThemeResource SubtleButtonStyle}" Padding="6,2">
+                    <FontIcon Glyph="&#xE711;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

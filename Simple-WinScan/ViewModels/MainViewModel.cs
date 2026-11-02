@@ -5,9 +5,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage.Streams;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Controls;
+using Simple_WinScan.Helpers;
 using Simple_WinScan.Models;
 using Simple_WinScan.Services.Exceptions;
 using Simple_WinScan.Services.Implementations;
@@ -607,6 +610,71 @@ public partial class MainViewModel : ObservableObject
 
                 ShowNotification("Preferencias actualizadas", "Se aplicaron los nuevos ajustes de digitalización.", InfoBarSeverity.Success);
             }
+        }
+    }
+
+    [RelayCommand]
+    public async Task DuplicateSelectedPageAsync()
+    {
+        if (SelectedPage == null) return;
+        int currentIndex = Pages.IndexOf(SelectedPage);
+        var clonedModel = SelectedPage.Model.Clone();
+        var itemVm = new ScannedPageItemViewModel(
+            clonedModel,
+            currentIndex + 2,
+            onDeleteRequested: OnPageDeleteRequested,
+            onPageUpdated: OnPageModified);
+
+        await itemVm.InitializeThumbnailAsync();
+        Pages.Insert(currentIndex + 1, itemVm);
+
+        for (int i = 0; i < Pages.Count; i++)
+        {
+            Pages[i].PageNumber = i + 1;
+        }
+
+        SelectedPage = itemVm;
+        UpdatePageSummary();
+        IsDirty = true;
+        StatusMessage = $"Página duplicada.";
+    }
+
+    [RelayCommand]
+    public async Task CopySelectedPageToClipboardAsync()
+    {
+        if (SelectedPage == null) return;
+
+        try
+        {
+            var dataPackage = new DataPackage();
+            dataPackage.RequestedOperation = DataPackageOperation.Copy;
+
+            byte[] processedBytes = ImageHelper.ProcessImage(
+                SelectedPage.Model.ImageBytes,
+                SelectedPage.Model.RotationAngle,
+                SelectedPage.Model.Crop);
+
+            var memStream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(memStream))
+            {
+                writer.WriteBytes(processedBytes);
+                await writer.StoreAsync();
+                await writer.FlushAsync();
+                writer.DetachStream();
+            }
+            memStream.Seek(0);
+
+            dataPackage.SetBitmap(RandomAccessStreamReference.CreateFromStream(memStream));
+            Clipboard.SetContent(dataPackage);
+
+            ShowNotification(
+                "Página copiada al portapapeles",
+                "La imagen procesada está lista para pegarse (Ctrl+V) en otras aplicaciones.",
+                InfoBarSeverity.Informational);
+        }
+        catch (Exception ex)
+        {
+            ShowNotification("Error al copiar al portapapeles", ex.Message, InfoBarSeverity.Error);
         }
     }
 
