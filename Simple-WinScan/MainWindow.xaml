@@ -280,6 +280,25 @@
 
         <!-- Fila 3: Lienzo Central -->
         <Grid Grid.Row="3">
+            <!-- Barra de Notificación de Recuperación de Sesión -->
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasRecoverableSession, Mode=OneWay}"
+                Severity="Warning"
+                Title="Sesión no guardada detectada"
+                Message="{x:Bind ViewModel.RecoveryMessage, Mode=OneWay}"
+                IsClosable="True"
+                CloseButtonCommand="{x:Bind ViewModel.DiscardRecoveryCommand}"
+                Margin="16,8"
+                VerticalAlignment="Top"
+                Canvas.ZIndex="10">
+                <InfoBar.ActionButton>
+                    <Button
+                        Content="Recuperar documento"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{x:Bind ViewModel.RecoverSessionCommand}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
             <!-- Estado Vacío (0 páginas) -->
             <StackPanel
                 Visibility="{x:Bind GetEmptyStateVisibility(ViewModel.HasPages), Mode=OneWay}"

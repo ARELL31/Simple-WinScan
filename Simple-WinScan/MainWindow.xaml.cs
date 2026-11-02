@@ -19,6 +19,25 @@ public sealed partial class MainWindow : Window
         this.SetTitleBar(AppTitleBar);
 
         this.Activated += MainWindow_Activated;
+        this.AppWindow.Closing += AppWindow_Closing;
+    }
+
+    private bool _isClosingConfirmed;
+
+    private async void AppWindow_Closing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (_isClosingConfirmed) return;
+
+        if (ViewModel.IsDirty && ViewModel.Pages.Count > 0)
+        {
+            args.Cancel = true;
+            bool discard = await ViewModel.ConfirmCloseIfDirtyAsync();
+            if (discard)
+            {
+                _isClosingConfirmed = true;
+                this.Close();
+            }
+        }
     }
 
     private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)

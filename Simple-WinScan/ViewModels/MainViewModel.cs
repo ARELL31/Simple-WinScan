@@ -26,6 +26,7 @@ public partial class MainViewModel : ObservableObject
     private readonly IImageExportService _imageExportService;
     private readonly IPrintService _printService;
     private readonly ISystemIntegrationService _systemService;
+    private readonly IAutosaveService _autosaveService;
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private CancellationTokenSource? _scanCts;
@@ -67,6 +68,12 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isDirty;
+
+    [ObservableProperty]
+    private bool _hasRecoverableSession;
+
+    [ObservableProperty]
+    private string _recoveryMessage = string.Empty;
 
     [ObservableProperty]
     private bool _isVirtualScannerEnabled;
@@ -161,6 +168,20 @@ public partial class MainViewModel : ObservableObject
         ISystemIntegrationService systemService,
         IDialogService dialogService,
         ISettingsService settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, imageExportService, printService, systemService, new JsonAutosaveService(), dialogService, settingsService)
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IImageExportService imageExportService,
+        IPrintService printService,
+        ISystemIntegrationService systemService,
+        IAutosaveService autosaveService,
+        IDialogService dialogService,
+        ISettingsService settingsService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
         _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
@@ -168,6 +189,7 @@ public partial class MainViewModel : ObservableObject
         _imageExportService = imageExportService ?? throw new ArgumentNullException(nameof(imageExportService));
         _printService = printService ?? throw new ArgumentNullException(nameof(printService));
         _systemService = systemService ?? throw new ArgumentNullException(nameof(systemService));
+        _autosaveService = autosaveService ?? throw new ArgumentNullException(nameof(autosaveService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
@@ -182,6 +204,17 @@ public partial class MainViewModel : ObservableObject
         var settings = await _settingsService.LoadSettingsAsync();
         IsVirtualScannerEnabled = settings.IsVirtualScannerEnabled;
         await LoadScannersAsync(savedScannerId: settings.LastSelectedScannerId);
+
+        try
+        {
+            bool hasAutosave = await _autosaveService.HasAutosavedSessionAsync();
+            if (hasAutosave)
+            {
+                HasRecoverableSession = true;
+                RecoveryMessage = "Se detectó un documento no guardado de una sesión anterior inesperada.";
+            }
+        }
+        catch { }
     }
 
     [RelayCommand]
@@ -517,12 +550,14 @@ public partial class MainViewModel : ObservableObject
         SelectedPage = itemVm;
         UpdatePageSummary();
         IsDirty = true;
+        TriggerAutosave();
     }
 
     private void OnPageModified()
     {
         IsDirty = true;
         UpdatePageSummary();
+        TriggerAutosave();
     }
 
     [RelayCommand]
@@ -564,6 +599,7 @@ public partial class MainViewModel : ObservableObject
             await _pdfExportService.ExportPagesToPdfAsync(rawPages, fileStream);
 
             IsDirty = false;
+            _ = _autosaveService.ClearSessionAsync();
             StatusMessage = "PDF guardado exitosamente.";
             ShowNotification("Documento Guardado", $"Se ha exportado correctamente a:\n{targetPath}", InfoBarSeverity.Success);
         }
@@ -608,6 +644,7 @@ public partial class MainViewModel : ObservableObject
             var exportedFiles = await _imageExportService.ExportPagesAsync(rawPages, targetPath, format);
 
             IsDirty = false;
+            _ = _autosaveService.ClearSessionAsync();
             StatusMessage = $"Imágenes guardadas exitosamente ({exportedFiles.Count} archivo{(exportedFiles.Count > 1 ? "s" : "")}).";
             ShowNotification(
                 "Exportación Completada",
@@ -746,6 +783,8 @@ public partial class MainViewModel : ObservableObject
             Pages.Clear();
             SelectedPage = null;
             UpdatePageSummary();
+            IsDirty = false;
+            await _autosaveService.ClearSessionAsync();
             StatusMessage = "Documento limpiado.";
         }
     }
@@ -812,6 +851,7 @@ public partial class MainViewModel : ObservableObject
         SelectedPage = itemVm;
         UpdatePageSummary();
         IsDirty = true;
+        TriggerAutosave();
         StatusMessage = $"Página duplicada.";
     }
 
@@ -864,6 +904,7 @@ public partial class MainViewModel : ObservableObject
                 SelectedPage = Pages.FirstOrDefault();
                 UpdatePageSummary();
                 IsDirty = true;
+                TriggerAutosave();
             }
         }
     }
@@ -937,8 +978,77 @@ public partial class MainViewModel : ObservableObject
             }
 
             UpdatePageSummary();
+            IsDirty = true;
+            TriggerAutosave();
             StatusMessage = "Página eliminada.";
         }
+    }
+
+    [RelayCommand]
+    public async Task RecoverSessionAsync()
+    {
+        try
+        {
+            var pages = await _autosaveService.RecoverSessionAsync();
+            if (pages.Count > 0)
+            {
+                Pages.Clear();
+                foreach (var page in pages)
+                {
+                    await AddAcquiredPageAsync(page);
+                }
+                IsDirty = true;
+                HasRecoverableSession = false;
+                ShowNotification("Recuperación Completada", $"Se recuperaron {pages.Count} página(s) de la sesión anterior.", InfoBarSeverity.Success);
+            }
+            else
+            {
+                HasRecoverableSession = false;
+                await _autosaveService.ClearSessionAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowNotification("Error de Recuperación", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    [RelayCommand]
+    public async Task DiscardRecoveryAsync()
+    {
+        HasRecoverableSession = false;
+        await _autosaveService.ClearSessionAsync();
+    }
+
+    public async Task<bool> ConfirmCloseIfDirtyAsync()
+    {
+        if (!IsDirty || Pages.Count == 0) return true;
+
+        bool confirm = await _dialogService.ShowConfirmationAsync(
+            "Cambios sin guardar",
+            "Tienes páginas digitalizadas sin guardar. ¿Deseas cerrar la aplicación y descartar los cambios?",
+            "Cerrar y descartar",
+            "Cancelar");
+
+        if (confirm)
+        {
+            await _autosaveService.ClearSessionAsync();
+            IsDirty = false;
+        }
+
+        return confirm;
+    }
+
+    private void TriggerAutosave()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _autosaveService.SaveSessionAsync(Pages.ToList());
+            }
+            catch { }
+        });
     }
 
     private void UpdatePageSummary()
