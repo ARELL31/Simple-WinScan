@@ -1,0 +1,69 @@
+<ContentDialog
+    x:Class="Simple_WinScan.Views.ReorderPagesDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Reordenar Páginas del Documento"
+    PrimaryButtonText="Aplicar"
+    CloseButtonText="Cancelar"
+    DefaultButton="Primary">
+
+    <StackPanel Spacing="16" Width="420" Padding="0,8">
+        <TextBlock
+            Text="Selecciona la transformación a aplicar a las páginas del documento:"
+            TextWrapping="Wrap"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            FontSize="13" />
+
+        <StackPanel Spacing="10">
+            <RadioButton
+                x:Name="RadioReverse"
+                Content="Invertir todo el documento"
+                IsChecked="True"
+                GroupName="ReorderGroup" />
+            <TextBlock
+                Text="Invierte el orden de lectura completo (1..N pasa a N..1)."
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                FontSize="11"
+                Margin="28,-6,0,0" />
+
+            <RadioButton
+                x:Name="RadioCollate"
+                Content="Intercalar caras (Dúplex manual)"
+                GroupName="ReorderGroup" />
+            <StackPanel Margin="28,-6,0,0" Spacing="4">
+                <TextBlock
+                    Text="Combina la primera mitad (frentes) con la segunda mitad (reversos)."
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    FontSize="11" />
+                <CheckBox
+                    x:Name="CheckReverseBackPages"
+                    Content="Invertir orden de los reversos (si salieron invertidos)"
+                    IsChecked="True"
+                    FontSize="12" />
+            </StackPanel>
+
+            <RadioButton
+                x:Name="RadioRotateEven"
+                Content="Rotar 180° las páginas pares (2, 4, 6...)"
+                GroupName="ReorderGroup" />
+            <TextBlock
+                Text="Corrige la orientación de las caras posteriores escaneadas en rotación opuesta."
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                FontSize="11"
+                Margin="28,-6,0,0" />
+
+            <RadioButton
+                x:Name="RadioRotateOdd"
+                Content="Rotar 180° las páginas impares (1, 3, 5...)"
+                GroupName="ReorderGroup" />
+            <TextBlock
+                Text="Corrige la orientación de las caras frontales."
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                FontSize="11"
+                Margin="28,-6,0,0" />
+        </StackPanel>
+    </StackPanel>
+</ContentDialog>

@@ -1,9 +1,9 @@
 #define MyAppName "WinSimpleScan"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "ARELL31"
 #define MyAppURL "https://github.com/ARELL31/Simple-WinScan"
 #define MyAppExeName "WinSimpleScan.exe"
-#define SourceDir "C:\Users\cabez\source\repos\Simple-WinScan\Simple-WinScan\bin\Release\net8.0-windows10.0.19041.0\win-x64"
+#define SourceDir "..\Simple-WinScan\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
 
 [Setup]
 AppId={{5D26C4F1-79A4-4D78-BC86-1E804D7969E2}
@@ -16,9 +16,9 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-LicenseFile=C:\Users\cabez\source\repos\Simple-WinScan\LICENSE
-OutputDir=C:\Users\cabez\source\repos\Simple-WinScan\release-artifacts
-OutputBaseFilename=WinSimpleScan-1.0.0-Setup-x64
+LicenseFile=..\LICENSE
+OutputDir=..\release-artifacts
+OutputBaseFilename=WinSimpleScan-2.0.0-Setup-x64
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

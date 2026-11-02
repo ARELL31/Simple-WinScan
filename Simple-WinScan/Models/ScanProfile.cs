@@ -20,6 +20,13 @@ public enum PageSizeFormat
     Auto
 }
 
+public enum ScanSource
+{
+    Flatbed,
+    Feeder,
+    Duplex
+}
+
 public record ScanProfile
 {
     public string Name { get; init; } = "Texto";
@@ -27,6 +34,7 @@ public record ScanProfile
     public int Dpi { get; init; } = 300;
     public ScanColorMode ColorMode { get; init; } = ScanColorMode.Grayscale;
     public PageSizeFormat PageFormat { get; init; } = PageSizeFormat.A4;
+    public ScanSource Source { get; init; } = ScanSource.Flatbed;
 
     public static ScanProfile TextDefault => new()
     {

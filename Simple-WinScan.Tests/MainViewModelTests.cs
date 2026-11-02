@@ -27,6 +27,11 @@ public class MainViewModelTests
             return Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo>());
         }
 
+        public Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner)
+        {
+            return Task.FromResult(ScannerCapabilities.Default);
+        }
+
         public Task<ScannedPage> ScanPageAsync(
             ScannerDeviceInfo? scanner,
             ScanProfile profile,
@@ -36,6 +41,18 @@ public class MainViewModelTests
             if (OnScanPage != null) return OnScanPage(scanner, profile, progress, cancellationToken);
             return Task.FromResult(new ScannedPage { ImageBytes = new byte[] { 1, 2, 3 }, PixelWidth = 100, PixelHeight = 100, Dpi = 300 });
         }
+
+        public async Task<IReadOnlyList<ScannedPage>> ScanBatchAsync(
+            ScannerDeviceInfo? scanner,
+            ScanProfile profile,
+            Action<ScannedPage> onPageAcquired,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            var page = await ScanPageAsync(scanner, profile, progress, cancellationToken);
+            onPageAcquired?.Invoke(page);
+            return new List<ScannedPage> { page };
+        }
     }
 
     private class FakePdfExportService : IPdfExportService
@@ -44,13 +61,31 @@ public class MainViewModelTests
         {
             return Task.CompletedTask;
         }
+
+        public Task ExportPagesToPdfAsync(IReadOnlyList<ScannedPage> pages, Stream outputStream, bool enableOcr, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private class FakeDialogService : IDialogService
     {
         public Task<string?> PickSavePdfPathAsync(string defaultFileName) => Task.FromResult<string?>("C:\\fake.pdf");
+        public Task<string?> PickSaveImagePathAsync(string defaultFileName, ImageExportFormat format) => Task.FromResult<string?>("C:\\fake.jpg");
         public Task ShowMessageAsync(string title, string message) => Task.CompletedTask;
         public Task<bool> ShowConfirmationAsync(string title, string message, string confirmText, string cancelText) => Task.FromResult(true);
+    }
+
+    private class FakeSettingsService : ISettingsService
+    {
+        public AppSettings CurrentSettings { get; set; } = new();
+
+        public Task<AppSettings> LoadSettingsAsync() => Task.FromResult(CurrentSettings);
+        public Task SaveSettingsAsync(AppSettings settings)
+        {
+            CurrentSettings = settings;
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]
@@ -243,5 +278,73 @@ public class MainViewModelTests
         Assert.Equal(InfoBarSeverity.Warning, vm.InfoBarSeverity);
         Assert.Equal("Sin escáner seleccionado", vm.InfoBarTitle);
         Assert.Empty(vm.Pages);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenSavedScannerExists_PreselectsSavedScanner()
+    {
+        var scanner1 = new ScannerDeviceInfo { Id = "DEV_A", Name = "Scanner A" };
+        var scanner2 = new ScannerDeviceInfo { Id = "DEV_B", Name = "Scanner B" };
+        var fakeScanner = new FakeScannerService
+        {
+            OnGetAvailableScanners = () => Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo> { scanner1, scanner2 })
+        };
+        var fakeSettings = new FakeSettingsService
+        {
+            CurrentSettings = new AppSettings { LastSelectedScannerId = "DEV_B" }
+        };
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService(), fakeSettings);
+        await vm.InitializeAsync();
+
+        Assert.NotNull(vm.SelectedScanner);
+        Assert.Equal("DEV_B", vm.SelectedScanner.Id);
+    }
+
+    [Fact]
+    public async Task SelectedScanner_WhenChanged_SavesToSettings()
+    {
+        var scanner1 = new ScannerDeviceInfo { Id = "DEV_A", Name = "Scanner A" };
+        var scanner2 = new ScannerDeviceInfo { Id = "DEV_B", Name = "Scanner B" };
+        var fakeScanner = new FakeScannerService
+        {
+            OnGetAvailableScanners = () => Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo> { scanner1, scanner2 })
+        };
+        var fakeSettings = new FakeSettingsService();
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService(), fakeSettings);
+        await vm.InitializeAsync();
+
+        vm.SelectedScanner = scanner2;
+
+        Assert.Equal("DEV_B", fakeSettings.CurrentSettings.LastSelectedScannerId);
+    }
+
+    [Fact]
+    public async Task LoadScannersAsync_HotRefresh_PreservesCurrentSelectionIfStillPresent()
+    {
+        var scanner1 = new ScannerDeviceInfo { Id = "DEV_A", Name = "Scanner A" };
+        var scanner2 = new ScannerDeviceInfo { Id = "DEV_B", Name = "Scanner B" };
+        var currentList = new List<ScannerDeviceInfo> { scanner1, scanner2 };
+
+        var fakeScanner = new FakeScannerService
+        {
+            OnGetAvailableScanners = () => Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(currentList)
+        };
+        var fakeSettings = new FakeSettingsService();
+
+        var vm = new MainViewModel(fakeScanner, new MockScannerService(), new FakePdfExportService(), new FakeDialogService(), fakeSettings);
+        await vm.InitializeAsync();
+        vm.SelectedScanner = scanner2;
+
+        // Simular que se conecta un tercer escáner por USB (hot-plug)
+        var scanner3 = new ScannerDeviceInfo { Id = "DEV_C", Name = "Scanner C" };
+        currentList.Add(scanner3);
+
+        await vm.LoadScannersAsync();
+
+        Assert.Equal(3, vm.AvailableScanners.Count);
+        Assert.NotNull(vm.SelectedScanner);
+        Assert.Equal("DEV_B", vm.SelectedScanner.Id);
     }
 }

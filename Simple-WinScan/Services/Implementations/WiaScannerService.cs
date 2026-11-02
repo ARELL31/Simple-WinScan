@@ -44,6 +44,11 @@ public class WiaScannerService : IScannerService
         });
     }
 
+    public Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner)
+    {
+        return Task.FromResult(ScannerCapabilities.Default);
+    }
+
     public Task<ScannedPage> ScanPageAsync(
         ScannerDeviceInfo? scanner,
         ScanProfile profile,
@@ -55,71 +60,124 @@ public class WiaScannerService : IScannerService
             throw new ArgumentNullException(nameof(scanner), "Se debe seleccionar un escáner válido para digitalizar.");
         }
 
+        return RunInStaAsync(() => ScanPageInternal(scanner, profile, progress, cancellationToken), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<ScannedPage>> ScanBatchAsync(
+        ScannerDeviceInfo? scanner,
+        ScanProfile profile,
+        Action<ScannedPage> onPageAcquired,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (scanner == null)
+        {
+            throw new ArgumentNullException(nameof(scanner), "Se debe seleccionar un escáner válido para digitalizar.");
+        }
+
         return RunInStaAsync(() =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            var acquiredPages = new List<ScannedPage>();
 
-            try
+            while (true)
             {
-                var (rawBytes, width, height) = _wiaInterop.TransferImage(scanner, profile, progress, cancellationToken);
-
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (rawBytes == null || rawBytes.Length == 0)
+                try
                 {
-                    throw new ScannerHardwareException(
-                        $"El escáner '{scanner.Name}' completó la transferencia sin transferir datos de imagen.",
-                        unchecked((int)0x80210001),
-                        scanner.Id,
-                        scanner.Name);
-                }
+                    var page = ScanPageInternal(scanner, profile, progress, cancellationToken);
+                    acquiredPages.Add(page);
+                    onPageAcquired?.Invoke(page);
 
-                return new ScannedPage
-                {
-                    ImageBytes = rawBytes,
-                    PixelWidth = width,
-                    PixelHeight = height,
-                    Dpi = profile.Dpi,
-                    RotationAngle = 0
-                };
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (COMException comEx)
-            {
-                // Detectar si fue cancelación solicitada por el usuario o driver abortado
-                if (cancellationToken.IsCancellationRequested ||
-                    comEx.ErrorCode == unchecked((int)0x800704C7) || // ERROR_CANCELLED (0x4C7)
-                    comEx.ErrorCode == unchecked((int)0x80004004) || // E_ABORT
-                    comEx.ErrorCode == unchecked((int)0x80210064))   // WIA_STATUS_WARMING_UP / Cancel error
-                {
-                    throw new OperationCanceledException("La captura fue cancelada por el usuario.", comEx, cancellationToken);
+                    if (profile.Source == ScanSource.Flatbed)
+                    {
+                        break;
+                    }
                 }
-
-                // Mapear con precisión HRESULT a mensaje descriptivo en español
-                throw ScannerHardwareException.FromComException(comEx, scanner.Id, scanner.Name);
-            }
-            catch (ScannerHardwareException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                if (cancellationToken.IsCancellationRequested)
+                catch (COMException comEx) when (comEx.ErrorCode == unchecked((int)0x80210003)) // WIA_ERROR_PAPER_EMPTY
                 {
-                    throw new OperationCanceledException("La captura fue cancelada por el usuario.", ex, cancellationToken);
+                    // Fin normal de páginas en la bandeja del alimentador
+                    break;
                 }
-
-                throw new ScannerHardwareException(
-                    $"Error inesperado durante la captura con el escáner '{scanner.Name}': {ex.Message}",
-                    unchecked((int)0x80004005),
-                    scanner.Id,
-                    scanner.Name,
-                    ex);
             }
+
+            return (IReadOnlyList<ScannedPage>)acquiredPages;
         }, cancellationToken);
+    }
+
+    private ScannedPage ScanPageInternal(
+        ScannerDeviceInfo scanner,
+        ScanProfile profile,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var (rawBytes, width, height) = _wiaInterop.TransferImage(scanner, profile, progress, cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (rawBytes == null || rawBytes.Length == 0)
+            {
+                throw new ScannerHardwareException(
+                    $"El escáner '{scanner.Name}' completó la transferencia sin transferir datos de imagen.",
+                    unchecked((int)0x80210001),
+                    scanner.Id,
+                    scanner.Name);
+            }
+
+            return new ScannedPage
+            {
+                ImageBytes = rawBytes,
+                PixelWidth = width,
+                PixelHeight = height,
+                Dpi = profile.Dpi,
+                RotationAngle = 0
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (COMException comEx)
+        {
+            // Si es fin de papel en ADF, dejarlo subir para que el bucle de lote lo capture
+            if (comEx.ErrorCode == unchecked((int)0x80210003))
+            {
+                throw;
+            }
+
+            if (cancellationToken.IsCancellationRequested ||
+                comEx.ErrorCode == unchecked((int)0x800704C7) || // ERROR_CANCELLED (0x4C7)
+                comEx.ErrorCode == unchecked((int)0x80004004) || // E_ABORT
+                comEx.ErrorCode == unchecked((int)0x80210064))   // WIA_STATUS_WARMING_UP / Cancel error
+            {
+                throw new OperationCanceledException("La captura fue cancelada por el usuario.", comEx, cancellationToken);
+            }
+
+            // Mapear con precisión HRESULT a mensaje descriptivo en español
+            throw ScannerHardwareException.FromComException(comEx, scanner.Id, scanner.Name);
+        }
+        catch (ScannerHardwareException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException("La captura fue cancelada por el usuario.", ex, cancellationToken);
+            }
+
+            throw new ScannerHardwareException(
+                $"Error inesperado durante la captura con el escáner '{scanner.Name}': {ex.Message}",
+                unchecked((int)0x80004005),
+                scanner.Id,
+                scanner.Name,
+                ex);
+        }
     }
 
     private static Task<T> RunInStaAsync<T>(Func<T> func, CancellationToken cancellationToken = default)

@@ -36,31 +36,61 @@
             <Grid ColumnDefinitions="Auto, *, Auto">
                 <!-- Acciones Principales (Izquierda) -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <!-- Botón Principal de Escaneo -->
-                    <Button
+                    <!-- Botón Principal de Escaneo con Menú de Modos (Cama Plana, Lote ADF, Modo Continuo) -->
+                    <SplitButton
                         Command="{x:Bind ViewModel.ScanCommand}"
                         IsEnabled="{x:Bind ViewModel.CanScan, Mode=OneWay}"
                         Style="{StaticResource AccentButtonStyle}"
-                        Padding="14,8">
+                        ToolTipService.ToolTip="Escanear página desde cama plana (Ctrl+1)"
+                        AutomationProperties.Name="Escanear página">
+                        <SplitButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="Number1" Modifiers="Control" />
+                        </SplitButton.KeyboardAccelerators>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xEC59;" FontSize="16" />
                             <TextBlock Text="Escanear" FontWeight="SemiBold" />
                         </StackPanel>
-                    </Button>
+                        <SplitButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <MenuFlyoutItem
+                                    Text="Escanear página individual (Cama plana)"
+                                    Command="{x:Bind ViewModel.ScanCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEC59;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Escanear lote completo desde alimentador (ADF)"
+                                    Command="{x:Bind ViewModel.ScanBatchAdfCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE8B9;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Modo continuo con temporizador (Modo Libro)"
+                                    Command="{x:Bind ViewModel.StartContinuousScanCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE916;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </SplitButton.Flyout>
+                    </SplitButton>
 
-                    <!-- Botón Cancelar (solo activo durante escaneo, atajo Escape) -->
+                    <!-- Botón Cancelar / Detener (solo activo durante escaneo o modo continuo, atajo Escape) -->
                     <Button
                         Command="{x:Bind ViewModel.CancelScanCommand}"
-                        Visibility="{x:Bind ViewModel.IsScanning, Mode=OneWay}"
+                        Visibility="{x:Bind GetCancelVisibility(ViewModel.IsScanning, ViewModel.IsContinuousScanActive), Mode=OneWay}"
                         Style="{ThemeResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Cancelar digitalización en curso (Escape)"
+                        ToolTipService.ToolTip="Cancelar o detener digitalización en curso (Escape)"
+                        AutomationProperties.Name="Detener digitalización"
                         Padding="10,8">
                         <Button.KeyboardAccelerators>
                             <KeyboardAccelerator Key="Escape" />
                         </Button.KeyboardAccelerators>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE711;" FontSize="14" />
-                            <TextBlock Text="Cancelar" />
+                            <FontIcon Glyph="&#xE711;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            <TextBlock Text="Detener" />
                         </StackPanel>
                     </Button>
 
@@ -86,9 +116,13 @@
 
                     <Button
                         Command="{x:Bind ViewModel.LoadScannersCommand}"
-                        ToolTipService.ToolTip="Buscar escáneres conectados"
+                        ToolTipService.ToolTip="Actualizar lista de escáneres (F5)"
+                        AutomationProperties.Name="Actualizar lista de escáneres"
                         Style="{ThemeResource SubtleButtonStyle}"
                         Padding="8">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="F5" />
+                        </Button.KeyboardAccelerators>
                         <FontIcon Glyph="&#xE72C;" FontSize="14" />
                     </Button>
                 </StackPanel>
@@ -104,16 +138,96 @@
 
                 <!-- Acciones de Salida y Limpieza (Derecha) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <!-- Guardar PDF -->
-                    <Button
+                    <!-- Guardar / Exportar Documento (SplitButton) -->
+                    <SplitButton
                         Command="{x:Bind ViewModel.SavePdfCommand}"
                         IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
-                        Style="{StaticResource DefaultButtonStyle}"
-                        Padding="14,8">
+                        Padding="12,8"
+                        ToolTipService.ToolTip="Guardar documento como PDF (Ctrl+S)">
+                        <SplitButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="S" Modifiers="Control" />
+                        </SplitButton.KeyboardAccelerators>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE74E;" FontSize="15" Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
                             <TextBlock Text="Guardar PDF" FontWeight="SemiBold" />
                         </StackPanel>
+                        <SplitButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <MenuFlyoutItem
+                                    Text="Guardar como PDF (.pdf)"
+                                    Command="{x:Bind ViewModel.SavePdfCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEA90;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Exportar como JPEG (.jpg)"
+                                    Command="{x:Bind ViewModel.SaveJpegCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEB9F;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Exportar como PNG (.png)"
+                                    Command="{x:Bind ViewModel.SavePngCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEB9F;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Exportar como WebP (.webp)"
+                                    Command="{x:Bind ViewModel.SaveWebpCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEB9F;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Imprimir documento (Ctrl+P)"
+                                    Command="{x:Bind ViewModel.PrintDocumentCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE749;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Compartir documento..."
+                                    Command="{x:Bind ViewModel.ShareDocumentCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE72D;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Enviar por correo..."
+                                    Command="{x:Bind ViewModel.EmailDocumentCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE715;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Abrir en visor externo..."
+                                    Command="{x:Bind ViewModel.OpenDocumentInExternalViewerCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE7AC;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </SplitButton.Flyout>
+                    </SplitButton>
+
+                    <!-- Reordenar Páginas -->
+                    <Button
+                        Command="{x:Bind ViewModel.OpenReorderDialogCommand}"
+                        IsEnabled="{x:Bind ViewModel.HasPages, Mode=OneWay}"
+                        ToolTipService.ToolTip="Reordenar páginas: invertir, intercalar caras o rotar alternadas (Ctrl+R)"
+                        AutomationProperties.Name="Reordenar páginas"
+                        Style="{ThemeResource SubtleButtonStyle}"
+                        Padding="8">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="R" Modifiers="Control" />
+                        </Button.KeyboardAccelerators>
+                        <FontIcon Glyph="&#xE8D8;" FontSize="15" />
                     </Button>
 
                     <!-- Limpiar Todo -->
@@ -138,6 +252,14 @@
                                     Text="Habilitar escáner virtual (modo simulación)"
                                     IsChecked="{x:Bind ViewModel.IsVirtualScannerEnabled, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.ToggleVirtualScannerCommand}" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Preferencias de digitalización..."
+                                    Command="{x:Bind ViewModel.OpenSettingsCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE713;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
@@ -158,6 +280,25 @@
 
         <!-- Fila 3: Lienzo Central -->
         <Grid Grid.Row="3">
+            <!-- Barra de Notificación de Recuperación de Sesión -->
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasRecoverableSession, Mode=OneWay}"
+                Severity="Warning"
+                Title="Sesión no guardada detectada"
+                Message="{x:Bind ViewModel.RecoveryMessage, Mode=OneWay}"
+                IsClosable="True"
+                CloseButtonCommand="{x:Bind ViewModel.DiscardRecoveryCommand}"
+                Margin="16,8"
+                VerticalAlignment="Top"
+                Canvas.ZIndex="10">
+                <InfoBar.ActionButton>
+                    <Button
+                        Content="Recuperar documento"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{x:Bind ViewModel.RecoverSessionCommand}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
             <!-- Estado Vacío (0 páginas) -->
             <StackPanel
                 Visibility="{x:Bind GetEmptyStateVisibility(ViewModel.HasPages), Mode=OneWay}"

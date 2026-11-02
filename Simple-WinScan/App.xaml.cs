@@ -59,10 +59,17 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // Servicios del Dominio y Hardware
+        services.AddSingleton<ISettingsService, JsonSettingsService>();
         services.AddSingleton<IWiaNativeInterop, DefaultWiaNativeInterop>();
         services.AddSingleton<IScannerService, WiaScannerService>();
         services.AddSingleton<MockScannerService>();
+        services.AddSingleton<IOcrService, WindowsMediaOcrService>();
         services.AddSingleton<IPdfExportService, PdfSharpExportService>();
+        services.AddSingleton<IImageExportService, ImageSharpExportService>();
+        services.AddSingleton<IPrintService, SystemDrawingPrintService>();
+        services.AddSingleton<ISystemIntegrationService, WindowsSystemIntegrationService>();
+        services.AddSingleton<IAutosaveService, JsonAutosaveService>();
+        services.AddSingleton<IPostprocessingService, CommandPostprocessingService>();
         services.AddSingleton<IDialogService, WinUiDialogService>();
 
         // ViewModels
