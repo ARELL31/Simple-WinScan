@@ -190,6 +190,28 @@
                                         <FontIcon Glyph="&#xE749;" />
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Compartir documento..."
+                                    Command="{x:Bind ViewModel.ShareDocumentCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE72D;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Enviar por correo..."
+                                    Command="{x:Bind ViewModel.EmailDocumentCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE715;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Abrir en visor externo..."
+                                    Command="{x:Bind ViewModel.OpenDocumentInExternalViewerCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE7AC;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
                             </MenuFlyout>
                         </SplitButton.Flyout>
                     </SplitButton>

@@ -66,6 +66,7 @@ public partial class App : Application
         services.AddSingleton<IPdfExportService, PdfSharpExportService>();
         services.AddSingleton<IImageExportService, ImageSharpExportService>();
         services.AddSingleton<IPrintService, SystemDrawingPrintService>();
+        services.AddSingleton<ISystemIntegrationService, WindowsSystemIntegrationService>();
         services.AddSingleton<IDialogService, WinUiDialogService>();
 
         // ViewModels

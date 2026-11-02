@@ -40,7 +40,35 @@
                 Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
                 BorderThickness="1"
-                CornerRadius="4">
+                CornerRadius="4"
+                DoubleTapped="OnThumbnailDoubleTapped"
+                ToolTipService.ToolTip="Doble clic para abrir en visor externo">
+                <Border.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Abrir en visor externo" Click="OnOpenInViewerClicked">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7AC;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Recortar página (Ctrl+K)" Command="{x:Bind ViewModel.ToggleCropOverlayCommand}">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7A8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Rotar a la derecha" Command="{x:Bind ViewModel.RotateClockwiseCommand}">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7A6;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Eliminar página" Command="{x:Bind ViewModel.RequestDeleteCommand}">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE74D;" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Border.ContextFlyout>
                 
                 <Grid>
                     <Image

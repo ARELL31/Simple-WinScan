@@ -25,6 +25,7 @@ public partial class MainViewModel : ObservableObject
     private readonly IPdfExportService _pdfExportService;
     private readonly IImageExportService _imageExportService;
     private readonly IPrintService _printService;
+    private readonly ISystemIntegrationService _systemService;
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private CancellationTokenSource? _scanCts;
@@ -105,7 +106,7 @@ public partial class MainViewModel : ObservableObject
         IScannerService scannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, new MockScannerService(), pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), dialogService, new JsonSettingsService())
+        : this(scannerService, new MockScannerService(), pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), new WindowsSystemIntegrationService(pdfExportService), dialogService, new JsonSettingsService())
     {
     }
 
@@ -114,7 +115,7 @@ public partial class MainViewModel : ObservableObject
         MockScannerService mockScannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), dialogService, new JsonSettingsService())
+        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), new WindowsSystemIntegrationService(pdfExportService), dialogService, new JsonSettingsService())
     {
     }
 
@@ -124,7 +125,7 @@ public partial class MainViewModel : ObservableObject
         IPdfExportService pdfExportService,
         IDialogService dialogService,
         ISettingsService settingsService)
-        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), dialogService, settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), new WindowsSystemIntegrationService(pdfExportService), dialogService, settingsService)
     {
     }
 
@@ -135,7 +136,7 @@ public partial class MainViewModel : ObservableObject
         IImageExportService imageExportService,
         IDialogService dialogService,
         ISettingsService settingsService)
-        : this(scannerService, mockScannerService, pdfExportService, imageExportService, new SystemDrawingPrintService(), dialogService, settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, imageExportService, new SystemDrawingPrintService(), new WindowsSystemIntegrationService(pdfExportService), dialogService, settingsService)
     {
     }
 
@@ -147,12 +148,26 @@ public partial class MainViewModel : ObservableObject
         IPrintService printService,
         IDialogService dialogService,
         ISettingsService settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, imageExportService, printService, new WindowsSystemIntegrationService(pdfExportService), dialogService, settingsService)
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IImageExportService imageExportService,
+        IPrintService printService,
+        ISystemIntegrationService systemService,
+        IDialogService dialogService,
+        ISettingsService settingsService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
         _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
         _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
         _imageExportService = imageExportService ?? throw new ArgumentNullException(nameof(imageExportService));
         _printService = printService ?? throw new ArgumentNullException(nameof(printService));
+        _systemService = systemService ?? throw new ArgumentNullException(nameof(systemService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
@@ -663,6 +678,37 @@ public partial class MainViewModel : ObservableObject
                 IsExporting = false;
             }
         }
+    }
+
+    [RelayCommand]
+    public async Task OpenSelectedInExternalViewerAsync()
+    {
+        if (SelectedPage == null) return;
+        await _systemService.OpenInExternalViewerAsync(SelectedPage.Model);
+    }
+
+    [RelayCommand]
+    public async Task OpenDocumentInExternalViewerAsync()
+    {
+        if (Pages.Count == 0) return;
+        var rawPages = Pages.Select(p => p.Model).ToList();
+        await _systemService.OpenDocumentInExternalViewerAsync(rawPages);
+    }
+
+    [RelayCommand]
+    public async Task EmailDocumentAsync()
+    {
+        if (Pages.Count == 0) return;
+        var rawPages = Pages.Select(p => p.Model).ToList();
+        await _systemService.EmailPagesAsync(rawPages);
+    }
+
+    [RelayCommand]
+    public async Task ShareDocumentAsync()
+    {
+        if (Pages.Count == 0) return;
+        var rawPages = Pages.Select(p => p.Model).ToList();
+        await _systemService.SharePagesAsync(rawPages);
     }
 
     [RelayCommand]
