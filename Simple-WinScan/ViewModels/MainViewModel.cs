@@ -640,6 +640,59 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task OpenReorderDialogAsync()
+    {
+        if (Pages.Count <= 1)
+        {
+            ShowNotification("Reordenar páginas", "Se necesitan al menos 2 páginas para reordenar el documento.", InfoBarSeverity.Informational);
+            return;
+        }
+
+        if (Helpers.WindowHelper.MainWindow?.Content?.XamlRoot is Microsoft.UI.Xaml.XamlRoot xamlRoot)
+        {
+            var dialog = new Views.ReorderPagesDialog
+            {
+                XamlRoot = xamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                switch (dialog.SelectedAction)
+                {
+                    case Views.ReorderAction.Reverse:
+                        var reversed = Helpers.DocumentReorderHelper.Reverse(Pages.ToList());
+                        Pages.Clear();
+                        foreach (var p in reversed) Pages.Add(p);
+                        ShowNotification("Orden invertido", "Se invirtió el orden de las páginas del documento.", InfoBarSeverity.Success);
+                        break;
+
+                    case Views.ReorderAction.Collate:
+                        var collated = Helpers.DocumentReorderHelper.Collate(Pages.ToList(), dialog.ReverseBackPages);
+                        Pages.Clear();
+                        foreach (var p in collated) Pages.Add(p);
+                        ShowNotification("Caras intercaladas", "Se intercalaron los frentes y dorsos del documento.", InfoBarSeverity.Success);
+                        break;
+
+                    case Views.ReorderAction.RotateEven:
+                        Helpers.DocumentReorderHelper.RotateAlternates(Pages.ToList(), evenPages: true, angleDelta: 180);
+                        ShowNotification("Páginas pares rotadas", "Se rotaron 180° las páginas pares.", InfoBarSeverity.Success);
+                        break;
+
+                    case Views.ReorderAction.RotateOdd:
+                        Helpers.DocumentReorderHelper.RotateAlternates(Pages.ToList(), evenPages: false, angleDelta: 180);
+                        ShowNotification("Páginas impares rotadas", "Se rotaron 180° las páginas impares.", InfoBarSeverity.Success);
+                        break;
+                }
+
+                SelectedPage = Pages.FirstOrDefault();
+                UpdatePageSummary();
+                IsDirty = true;
+            }
+        }
+    }
+
+    [RelayCommand]
     public async Task CopySelectedPageToClipboardAsync()
     {
         if (SelectedPage == null) return;

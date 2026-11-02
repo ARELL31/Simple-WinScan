@@ -150,6 +150,20 @@
                         </StackPanel>
                     </Button>
 
+                    <!-- Reordenar Páginas -->
+                    <Button
+                        Command="{x:Bind ViewModel.OpenReorderDialogCommand}"
+                        IsEnabled="{x:Bind ViewModel.HasPages, Mode=OneWay}"
+                        ToolTipService.ToolTip="Reordenar páginas: invertir, intercalar caras o rotar alternadas (Ctrl+R)"
+                        AutomationProperties.Name="Reordenar páginas"
+                        Style="{ThemeResource SubtleButtonStyle}"
+                        Padding="8">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="R" Modifiers="Control" />
+                        </Button.KeyboardAccelerators>
+                        <FontIcon Glyph="&#xE8D8;" FontSize="15" />
+                    </Button>
+
                     <!-- Limpiar Todo -->
                     <Button
                         Command="{x:Bind ViewModel.ClearAllPagesCommand}"
