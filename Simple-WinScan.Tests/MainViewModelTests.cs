@@ -36,6 +36,18 @@ public class MainViewModelTests
             if (OnScanPage != null) return OnScanPage(scanner, profile, progress, cancellationToken);
             return Task.FromResult(new ScannedPage { ImageBytes = new byte[] { 1, 2, 3 }, PixelWidth = 100, PixelHeight = 100, Dpi = 300 });
         }
+
+        public async Task<IReadOnlyList<ScannedPage>> ScanBatchAsync(
+            ScannerDeviceInfo? scanner,
+            ScanProfile profile,
+            Action<ScannedPage> onPageAcquired,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            var page = await ScanPageAsync(scanner, profile, progress, cancellationToken);
+            onPageAcquired?.Invoke(page);
+            return new List<ScannedPage> { page };
+        }
     }
 
     private class FakePdfExportService : IPdfExportService

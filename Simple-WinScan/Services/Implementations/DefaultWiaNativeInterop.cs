@@ -103,6 +103,19 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
             throw new ScannerHardwareException($"No se pudo conectar al escáner '{scanner.Name}'. Verifique que esté encendido y conectado.", unchecked((int)0x80210005), scanner.Id, scanner.Name);
         }
 
+        try
+        {
+            dynamic devProps = targetDevice.Properties;
+            int handling = profile.Source switch
+            {
+                ScanSource.Feeder => 1,
+                ScanSource.Duplex => 4,
+                _ => 2
+            };
+            SetWiaProperty(devProps, 3088, handling); // WIA_DPS_DOCUMENT_HANDLING_SELECT
+        }
+        catch { }
+
         dynamic item = targetDevice.Items[1];
         dynamic itemProps = item.Properties;
 
@@ -138,7 +151,6 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
             if (callback.Stream != null)
             {
                 byte[] bytes = ReadStreamToBytes(callback.Stream);
-                progress?.Report(100);
 
                 int w = (int)(8.27 * profile.Dpi);
                 int h = (int)(11.69 * profile.Dpi);
@@ -146,8 +158,7 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
             }
         }
 
-        // 2. Ruta alternativa mediante WIA Automation con reporte de cancelación
-        progress?.Report(20);
+        // 2. Ruta alternativa mediante WIA Automation (progreso indeterminado al no haber callback cuantitativo)
         var dialogType = Type.GetTypeFromProgID("WIA.CommonDialog");
         dynamic? commonDialog = dialogType != null ? Activator.CreateInstance(dialogType) : null;
         dynamic imageFile;
@@ -165,7 +176,6 @@ public class DefaultWiaNativeInterop : IWiaNativeInterop
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        progress?.Report(100);
 
         byte[] rawBytes = imageFile.FileData?.BinaryData is byte[] data ? data : Array.Empty<byte>();
         int width = (int)imageFile.Width;

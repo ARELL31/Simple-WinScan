@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -48,6 +49,20 @@ public partial class MainViewModel : ObservableObject
     private bool _isExporting;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanScan))]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
+    private bool _isContinuousScanActive;
+
+    [ObservableProperty]
+    private int _continuousCountdownSeconds;
+
+    [ObservableProperty]
+    private int _continuousScanDelaySeconds = 5;
+
+    [ObservableProperty]
+    private bool _isDirty;
+
+    [ObservableProperty]
     private bool _isVirtualScannerEnabled;
 
     [ObservableProperty]
@@ -78,8 +93,8 @@ public partial class MainViewModel : ObservableObject
     private InfoBarSeverity _infoBarSeverity = InfoBarSeverity.Informational;
 
     public bool HasSelectedPage => SelectedPage != null;
-    public bool CanScan => !IsScanning && !IsExporting;
-    public bool CanSave => HasPages && !IsScanning && !IsExporting;
+    public bool CanScan => !IsScanning && !IsExporting && !IsContinuousScanActive;
+    public bool CanSave => HasPages && !IsScanning && !IsExporting && !IsContinuousScanActive;
 
     public MainViewModel(
         IScannerService scannerService,
@@ -242,21 +257,9 @@ public partial class MainViewModel : ObservableObject
             });
 
             var scannedPage = await activeService.ScanPageAsync(SelectedScanner, SelectedProfile, progress, _scanCts.Token);
+            await AddAcquiredPageAsync(scannedPage);
 
-            int nextNumber = Pages.Count + 1;
-            var itemVm = new ScannedPageItemViewModel(
-                scannedPage,
-                nextNumber,
-                onDeleteRequested: OnPageDeleteRequested,
-                onPageUpdated: UpdatePageSummary);
-
-            await itemVm.InitializeThumbnailAsync();
-
-            Pages.Add(itemVm);
-            SelectedPage = itemVm;
-            UpdatePageSummary();
-
-            StatusMessage = $"Página {nextNumber} digitalizada con éxito.";
+            StatusMessage = $"Página {Pages.Count} digitalizada con éxito.";
         }
         catch (OperationCanceledException)
         {
@@ -284,8 +287,208 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task ScanBatchAdfAsync()
+    {
+        if (IsScanning || IsContinuousScanActive) return;
+
+        if (SelectedScanner == null)
+        {
+            ShowNotification(
+                "Sin escáner seleccionado",
+                "Por favor seleccione un escáner físico o active el escáner virtual de prueba desde el menú [...].",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
+        IsScanning = true;
+        ScanProgressPercentage = 0;
+        IsProgressIndeterminate = true;
+        StatusMessage = $"Iniciando escaneo por lotes ADF con '{SelectedScanner.Name}'...";
+        _scanCts = new CancellationTokenSource();
+        int initialPageCount = Pages.Count;
+
+        try
+        {
+            var activeService = (SelectedScanner.Id == MockScannerService.MockScannerId)
+                ? (IScannerService)_mockScannerService
+                : _scannerService;
+
+            var adfProfile = SelectedProfile with { Source = ScanSource.Feeder };
+
+            var progress = new Progress<int>(percent =>
+            {
+                IsProgressIndeterminate = false;
+                ScanProgressPercentage = percent;
+                StatusMessage = $"Escaneando lote con '{SelectedScanner.Name}' ({percent}%)...";
+            });
+
+            await activeService.ScanBatchAsync(
+                SelectedScanner,
+                adfProfile,
+                onPageAcquired: async page =>
+                {
+                    await AddAcquiredPageAsync(page);
+                    StatusMessage = $"Página {Pages.Count} digitalizada del alimentador.";
+                },
+                progress,
+                _scanCts.Token);
+
+            int batchAcquired = Pages.Count - initialPageCount;
+            StatusMessage = $"Lote completado: {batchAcquired} páginas digitalizadas desde alimentador.";
+            ShowNotification("Lote ADF Finalizado", $"Se digitalizaron {batchAcquired} páginas correctamente.", InfoBarSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+            int batchAcquired = Pages.Count - initialPageCount;
+            StatusMessage = $"Escaneo de lote cancelado por el usuario ({batchAcquired} páginas conservadas).";
+            ShowNotification("Lote Cancelado", $"La digitalización se detuvo. Se conservaron {batchAcquired} páginas.", InfoBarSeverity.Informational);
+        }
+        catch (ScannerHardwareException ex)
+        {
+            int batchAcquired = Pages.Count - initialPageCount;
+            StatusMessage = $"Interrupción en el alimentador. Se conservaron {batchAcquired} páginas.";
+            ShowNotification(
+                "Fallo en Alimentador Automático",
+                $"{ex.Message} Se conservaron {batchAcquired} páginas en el documento. Despeje el alimentador para continuar.",
+                InfoBarSeverity.Warning);
+        }
+        catch (Exception ex)
+        {
+            int batchAcquired = Pages.Count - initialPageCount;
+            StatusMessage = $"Error durante escaneo de lote ({batchAcquired} páginas conservadas).";
+            ShowNotification("Error de Lote ADF", ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            IsScanning = false;
+            IsProgressIndeterminate = true;
+            ScanProgressPercentage = 0;
+            _scanCts?.Dispose();
+            _scanCts = null;
+        }
+    }
+
+    [RelayCommand]
+    public async Task StartContinuousScanAsync()
+    {
+        if (IsScanning || IsContinuousScanActive) return;
+
+        if (SelectedScanner == null)
+        {
+            ShowNotification(
+                "Sin escáner seleccionado",
+                "Por favor seleccione un escáner físico o active el escáner virtual de prueba.",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
+        IsContinuousScanActive = true;
+        _scanCts = new CancellationTokenSource();
+
+        try
+        {
+            var activeService = (SelectedScanner.Id == MockScannerService.MockScannerId)
+                ? (IScannerService)_mockScannerService
+                : _scannerService;
+
+            while (IsContinuousScanActive && !_scanCts.IsCancellationRequested)
+            {
+                IsScanning = true;
+                IsProgressIndeterminate = true;
+                ScanProgressPercentage = 0;
+                StatusMessage = $"Escaneando página continua con '{SelectedScanner.Name}'...";
+
+                var progress = new Progress<int>(percent =>
+                {
+                    IsProgressIndeterminate = false;
+                    ScanProgressPercentage = percent;
+                });
+
+                var page = await activeService.ScanPageAsync(SelectedScanner, SelectedProfile, progress, _scanCts.Token);
+                await AddAcquiredPageAsync(page);
+
+                IsScanning = false;
+                StatusMessage = $"Página {Pages.Count} digitalizada.";
+
+                int delay = ContinuousScanDelaySeconds > 0 ? ContinuousScanDelaySeconds : 5;
+                for (int s = delay; s > 0; s--)
+                {
+                    if (!IsContinuousScanActive || _scanCts.IsCancellationRequested) break;
+                    ContinuousCountdownSeconds = s;
+                    StatusMessage = $"Página {Pages.Count} lista. Próxima captura en {s} s... [Detener para terminar]";
+                    await Task.Delay(1000, _scanCts.Token);
+                }
+
+                if (!IsContinuousScanActive || _scanCts.IsCancellationRequested) break;
+
+                PlayBeepNotification();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Modo continuo detenido.";
+        }
+        catch (ScannerHardwareException ex)
+        {
+            StatusMessage = "Fallo del escáner en modo continuo.";
+            ShowNotification("Fallo de Hardware", ex.Message, InfoBarSeverity.Error);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Error en escaneo continuo.";
+            ShowNotification("Error en Modo Continuo", ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            IsContinuousScanActive = false;
+            IsScanning = false;
+            IsProgressIndeterminate = true;
+            ScanProgressPercentage = 0;
+            ContinuousCountdownSeconds = 0;
+            _scanCts?.Dispose();
+            _scanCts = null;
+        }
+    }
+
+    [RelayCommand]
+    public void StopContinuousScan()
+    {
+        IsContinuousScanActive = false;
+        _scanCts?.Cancel();
+    }
+
+    public async Task AddAcquiredPageAsync(ScannedPage scannedPage)
+    {
+        int nextNumber = Pages.Count + 1;
+        var itemVm = new ScannedPageItemViewModel(
+            scannedPage,
+            nextNumber,
+            onDeleteRequested: OnPageDeleteRequested,
+            onPageUpdated: OnPageModified);
+
+        await itemVm.InitializeThumbnailAsync();
+
+        Pages.Add(itemVm);
+        SelectedPage = itemVm;
+        UpdatePageSummary();
+        IsDirty = true;
+    }
+
+    private void OnPageModified()
+    {
+        IsDirty = true;
+        UpdatePageSummary();
+    }
+
+    [RelayCommand]
     public void CancelScan()
     {
+        if (IsContinuousScanActive)
+        {
+            StopContinuousScan();
+            return;
+        }
+
         if (IsScanning && _scanCts != null && !_scanCts.IsCancellationRequested)
         {
             StatusMessage = "Cancelando escaneo...";
@@ -420,5 +623,17 @@ public partial class MainViewModel : ObservableObject
         InfoBarMessage = message;
         InfoBarSeverity = severity;
         IsInfoBarOpen = true;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool MessageBeep(uint uType);
+
+    private static void PlayBeepNotification()
+    {
+        try
+        {
+            MessageBeep(0);
+        }
+        catch { }
     }
 }

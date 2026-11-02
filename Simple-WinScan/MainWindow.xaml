@@ -36,31 +36,61 @@
             <Grid ColumnDefinitions="Auto, *, Auto">
                 <!-- Acciones Principales (Izquierda) -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <!-- Botón Principal de Escaneo -->
-                    <Button
+                    <!-- Botón Principal de Escaneo con Menú de Modos (Cama Plana, Lote ADF, Modo Continuo) -->
+                    <SplitButton
                         Command="{x:Bind ViewModel.ScanCommand}"
                         IsEnabled="{x:Bind ViewModel.CanScan, Mode=OneWay}"
                         Style="{StaticResource AccentButtonStyle}"
-                        Padding="14,8">
+                        ToolTipService.ToolTip="Escanear página desde cama plana (Ctrl+1)"
+                        AutomationProperties.Name="Escanear página">
+                        <SplitButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="Number1" Modifiers="Control" />
+                        </SplitButton.KeyboardAccelerators>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xEC59;" FontSize="16" />
                             <TextBlock Text="Escanear" FontWeight="SemiBold" />
                         </StackPanel>
-                    </Button>
+                        <SplitButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <MenuFlyoutItem
+                                    Text="Escanear página individual (Cama plana)"
+                                    Command="{x:Bind ViewModel.ScanCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xEC59;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Escanear lote completo desde alimentador (ADF)"
+                                    Command="{x:Bind ViewModel.ScanBatchAdfCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE8B9;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem
+                                    Text="Modo continuo con temporizador (Modo Libro)"
+                                    Command="{x:Bind ViewModel.StartContinuousScanCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE916;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </SplitButton.Flyout>
+                    </SplitButton>
 
-                    <!-- Botón Cancelar (solo activo durante escaneo, atajo Escape) -->
+                    <!-- Botón Cancelar / Detener (solo activo durante escaneo o modo continuo, atajo Escape) -->
                     <Button
                         Command="{x:Bind ViewModel.CancelScanCommand}"
-                        Visibility="{x:Bind ViewModel.IsScanning, Mode=OneWay}"
+                        Visibility="{x:Bind GetCancelVisibility(ViewModel.IsScanning, ViewModel.IsContinuousScanActive), Mode=OneWay}"
                         Style="{ThemeResource SubtleButtonStyle}"
-                        ToolTipService.ToolTip="Cancelar digitalización en curso (Escape)"
+                        ToolTipService.ToolTip="Cancelar o detener digitalización en curso (Escape)"
+                        AutomationProperties.Name="Detener digitalización"
                         Padding="10,8">
                         <Button.KeyboardAccelerators>
                             <KeyboardAccelerator Key="Escape" />
                         </Button.KeyboardAccelerators>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE711;" FontSize="14" />
-                            <TextBlock Text="Cancelar" />
+                            <FontIcon Glyph="&#xE711;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            <TextBlock Text="Detener" />
                         </StackPanel>
                     </Button>
 

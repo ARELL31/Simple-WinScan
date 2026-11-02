@@ -32,6 +32,11 @@ public sealed partial class MainWindow : Window
         return (isScanning || isExporting) ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    public Visibility GetCancelVisibility(bool isScanning, bool isContinuousScanActive)
+    {
+        return (isScanning || isContinuousScanActive) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     public Visibility GetEmptyStateVisibility(bool hasPages)
     {
         return !hasPages ? Visibility.Visible : Visibility.Collapsed;

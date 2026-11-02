@@ -57,6 +57,40 @@ public class MockScannerService : IScannerService
         return GenerateMockPage(profile);
     }
 
+    public int SimulatedAdfPageCount { get; set; } = 3;
+    public int? FailOnAdfPageNumber { get; set; } = null;
+
+    public async Task<IReadOnlyList<ScannedPage>> ScanBatchAsync(
+        ScannerDeviceInfo? scanner,
+        ScanProfile profile,
+        Action<ScannedPage> onPageAcquired,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var acquiredPages = new List<ScannedPage>();
+        int count = profile.Source == ScanSource.Flatbed ? 1 : Math.Max(1, SimulatedAdfPageCount);
+
+        for (int i = 1; i <= count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (FailOnAdfPageNumber.HasValue && i == FailOnAdfPageNumber.Value)
+            {
+                throw new Exceptions.ScannerHardwareException(
+                    "Atasco de papel en alimentador automático (ADF).",
+                    unchecked((int)0x80210002),
+                    scanner?.Id ?? MockScannerId,
+                    scanner?.Name ?? MockScannerName);
+            }
+
+            var page = await ScanPageAsync(scanner, profile, progress, cancellationToken);
+            acquiredPages.Add(page);
+            onPageAcquired?.Invoke(page);
+        }
+
+        return acquiredPages;
+    }
+
     public static ScannedPage GenerateMockPage(ScanProfile profile)
     {
         int dpi = profile.Dpi;
