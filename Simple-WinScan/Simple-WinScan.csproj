@@ -12,10 +12,10 @@
     <Authors>ARELL31</Authors>
     <Company>ARELL31</Company>
     <Product>WinSimpleScan</Product>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <Version>2.0.0</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <InformationalVersion>2.0.0</InformationalVersion>
     <Copyright>Copyright © 2026 ARELL31</Copyright>
     <RepositoryUrl>https://github.com/ARELL31/Simple-WinScan</RepositoryUrl>
     <PublishProfile Condition="'$(Platform)' != '' and '$(Platform)' != 'AnyCPU'">win-$(Platform).pubxml</PublishProfile>

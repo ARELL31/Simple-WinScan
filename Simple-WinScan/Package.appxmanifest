@@ -11,7 +11,7 @@
   <Identity
     Name="bfa038dc-308e-4491-8836-e928b0c7bd2b"
     Publisher="CN=ARELL31"
-    Version="1.0.0.0" />
+    Version="2.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="bfa038dc-308e-4491-8836-e928b0c7bd2b" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
