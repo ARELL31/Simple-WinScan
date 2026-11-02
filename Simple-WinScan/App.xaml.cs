@@ -64,6 +64,7 @@ public partial class App : Application
         services.AddSingleton<IScannerService, WiaScannerService>();
         services.AddSingleton<MockScannerService>();
         services.AddSingleton<IPdfExportService, PdfSharpExportService>();
+        services.AddSingleton<IImageExportService, ImageSharpExportService>();
         services.AddSingleton<IDialogService, WinUiDialogService>();
 
         // ViewModels

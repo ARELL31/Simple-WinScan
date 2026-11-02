@@ -66,6 +66,7 @@ public class MainViewModelTests
     private class FakeDialogService : IDialogService
     {
         public Task<string?> PickSavePdfPathAsync(string defaultFileName) => Task.FromResult<string?>("C:\\fake.pdf");
+        public Task<string?> PickSaveImagePathAsync(string defaultFileName, ImageExportFormat format) => Task.FromResult<string?>("C:\\fake.jpg");
         public Task ShowMessageAsync(string title, string message) => Task.CompletedTask;
         public Task<bool> ShowConfirmationAsync(string title, string message, string confirmText, string cancelText) => Task.FromResult(true);
     }

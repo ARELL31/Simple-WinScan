@@ -31,6 +31,37 @@ public class WinUiDialogService : IDialogService
         return file?.Path;
     }
 
+    public async Task<string?> PickSaveImagePathAsync(string defaultFileName, ImageExportFormat format)
+    {
+        var savePicker = new FileSavePicker
+        {
+            SuggestedStartLocation = PickerLocationId.PicturesLibrary,
+            SuggestedFileName = defaultFileName
+        };
+
+        switch (format)
+        {
+            case ImageExportFormat.Jpeg:
+                savePicker.FileTypeChoices.Add("Imagen JPEG (*.jpg, *.jpeg)", new List<string> { ".jpg", ".jpeg" });
+                break;
+            case ImageExportFormat.Png:
+                savePicker.FileTypeChoices.Add("Imagen PNG (*.png)", new List<string> { ".png" });
+                break;
+            case ImageExportFormat.WebP:
+                savePicker.FileTypeChoices.Add("Imagen WebP (*.webp)", new List<string> { ".webp" });
+                break;
+        }
+
+        IntPtr hwnd = WindowHelper.GetWindowHandle();
+        if (hwnd != IntPtr.Zero)
+        {
+            InitializeWithWindow.Initialize(savePicker, hwnd);
+        }
+
+        var file = await savePicker.PickSaveFileAsync();
+        return file?.Path;
+    }
+
     public async Task ShowMessageAsync(string title, string message)
     {
         if (WindowHelper.MainWindow?.Content?.XamlRoot == null) return;

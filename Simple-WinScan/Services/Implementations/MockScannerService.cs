@@ -130,10 +130,9 @@ public class MockScannerService : IScannerService
 
             for (int y = Math.Max(0, startY); y < endY; y++)
             {
-                var rowSpan = image.GetPixelRowSpan(y);
                 for (int x = Math.Max(0, startX); x < endX; x++)
                 {
-                    rowSpan[x] = color;
+                    image[x, y] = color;
                 }
             }
         }

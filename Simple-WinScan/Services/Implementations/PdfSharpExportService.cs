@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
+using Simple_WinScan.Helpers;
 using Simple_WinScan.Models;
 using Simple_WinScan.Services.Interfaces;
 using SixLabors.ImageSharp;
@@ -32,30 +33,8 @@ public class PdfSharpExportService : IPdfExportService
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Procesar bytes de imagen con la rotación si es diferente de 0
-                byte[] finalBytes = page.ImageBytes;
-                int currentRotation = page.RotationAngle % 360;
-
-                if (currentRotation != 0)
-                {
-                    using var img = Image.Load(page.ImageBytes);
-                    switch (currentRotation)
-                    {
-                        case 90:
-                            img.Mutate(x => x.Rotate(90));
-                            break;
-                        case 180:
-                            img.Mutate(x => x.Rotate(180));
-                            break;
-                        case 270:
-                            img.Mutate(x => x.Rotate(270));
-                            break;
-                    }
-
-                    using var rotatedMs = new MemoryStream();
-                    img.SaveAsPng(rotatedMs);
-                    finalBytes = rotatedMs.ToArray();
-                }
+                // Procesar bytes aplicando rotación y recorte para paridad exacta
+                byte[] finalBytes = ImageHelper.ProcessImage(page.ImageBytes, page.RotationAngle, page.Crop);
 
                 using var imageStream = new MemoryStream(finalBytes);
                 using var xImage = XImage.FromStream(() => new MemoryStream(finalBytes));

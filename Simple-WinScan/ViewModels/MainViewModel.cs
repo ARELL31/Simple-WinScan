@@ -23,6 +23,7 @@ public partial class MainViewModel : ObservableObject
     private readonly IScannerService _scannerService;
     private readonly MockScannerService _mockScannerService;
     private readonly IPdfExportService _pdfExportService;
+    private readonly IImageExportService _imageExportService;
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private CancellationTokenSource? _scanCts;
@@ -103,7 +104,7 @@ public partial class MainViewModel : ObservableObject
         IScannerService scannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, new MockScannerService(), pdfExportService, dialogService, new JsonSettingsService())
+        : this(scannerService, new MockScannerService(), pdfExportService, new ImageSharpExportService(), dialogService, new JsonSettingsService())
     {
     }
 
@@ -112,7 +113,7 @@ public partial class MainViewModel : ObservableObject
         MockScannerService mockScannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, mockScannerService, pdfExportService, dialogService, new JsonSettingsService())
+        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), dialogService, new JsonSettingsService())
     {
     }
 
@@ -122,10 +123,22 @@ public partial class MainViewModel : ObservableObject
         IPdfExportService pdfExportService,
         IDialogService dialogService,
         ISettingsService settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), dialogService, settingsService)
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IImageExportService imageExportService,
+        IDialogService dialogService,
+        ISettingsService settingsService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
         _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
         _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
+        _imageExportService = imageExportService ?? throw new ArgumentNullException(nameof(imageExportService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
@@ -521,12 +534,62 @@ public partial class MainViewModel : ObservableObject
             using var fileStream = File.Create(targetPath);
             await _pdfExportService.ExportPagesToPdfAsync(rawPages, fileStream);
 
+            IsDirty = false;
             StatusMessage = "PDF guardado exitosamente.";
             ShowNotification("Documento Guardado", $"Se ha exportado correctamente a:\n{targetPath}", InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
             StatusMessage = "Error al exportar PDF.";
+            ShowNotification("Error de Exportación", ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
+    [RelayCommand]
+    public Task SaveJpegAsync() => SaveImagesInternalAsync(ImageExportFormat.Jpeg);
+
+    [RelayCommand]
+    public Task SavePngAsync() => SaveImagesInternalAsync(ImageExportFormat.Png);
+
+    [RelayCommand]
+    public Task SaveWebpAsync() => SaveImagesInternalAsync(ImageExportFormat.WebP);
+
+    private async Task SaveImagesInternalAsync(ImageExportFormat format)
+    {
+        if (!CanSave || Pages.Count == 0) return;
+
+        string ext = ImageSharpExportService.GetDefaultExtension(format);
+        string defaultFileName = Pages.Count == 1
+            ? $"Escaneo_{DateTime.Now:yyyy-MM-dd_HHmm}{ext}"
+            : $"Lote_{DateTime.Now:yyyy-MM-dd_HHmm}";
+
+        string? targetPath = await _dialogService.PickSaveImagePathAsync(defaultFileName, format);
+        if (string.IsNullOrWhiteSpace(targetPath)) return;
+
+        IsExporting = true;
+        StatusMessage = $"Exportando imágenes ({format})...";
+
+        try
+        {
+            var rawPages = Pages.Select(p => p.Model).ToList();
+            var exportedFiles = await _imageExportService.ExportPagesAsync(rawPages, targetPath, format);
+
+            IsDirty = false;
+            StatusMessage = $"Imágenes guardadas exitosamente ({exportedFiles.Count} archivo{(exportedFiles.Count > 1 ? "s" : "")}).";
+            ShowNotification(
+                "Exportación Completada",
+                exportedFiles.Count == 1
+                    ? $"Se ha guardado en:\n{exportedFiles[0]}"
+                    : $"Se han guardado {exportedFiles.Count} páginas en:\n{Path.GetDirectoryName(exportedFiles[0])}",
+                InfoBarSeverity.Success);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Error al exportar imágenes.";
             ShowNotification("Error de Exportación", ex.Message, InfoBarSeverity.Error);
         }
         finally
