@@ -1,0 +1,45 @@
+name: CI & Build
+
+on:
+  push:
+    branches: [ main, 'integration/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore -p:Platform=x64
+
+      - name: Run Unit Tests
+        run: dotnet test Simple-WinScan.Tests/Simple-WinScan.Tests.csproj -p:Platform=x64 --no-restore --verbosity normal
+
+      - name: Publish Release App
+        run: dotnet publish Simple-WinScan/Simple-WinScan.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress
+
+      - name: Compile Installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/installer.iss
+
+      - name: Archive Portable Zip
+        run: |
+          Compress-Archive -Path "Simple-WinScan/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/*" -DestinationPath "release-artifacts/WinSimpleScan-2.0.0-win-x64-portable.zip" -Force
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Simple-WinScan-2.0.0-Binaries
+          path: release-artifacts/*2.0.0*
