@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject
     private readonly MockScannerService _mockScannerService;
     private readonly IPdfExportService _pdfExportService;
     private readonly IImageExportService _imageExportService;
+    private readonly IPrintService _printService;
     private readonly IDialogService _dialogService;
     private readonly ISettingsService _settingsService;
     private CancellationTokenSource? _scanCts;
@@ -104,7 +105,7 @@ public partial class MainViewModel : ObservableObject
         IScannerService scannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, new MockScannerService(), pdfExportService, new ImageSharpExportService(), dialogService, new JsonSettingsService())
+        : this(scannerService, new MockScannerService(), pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), dialogService, new JsonSettingsService())
     {
     }
 
@@ -113,7 +114,7 @@ public partial class MainViewModel : ObservableObject
         MockScannerService mockScannerService,
         IPdfExportService pdfExportService,
         IDialogService dialogService)
-        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), dialogService, new JsonSettingsService())
+        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), dialogService, new JsonSettingsService())
     {
     }
 
@@ -123,7 +124,7 @@ public partial class MainViewModel : ObservableObject
         IPdfExportService pdfExportService,
         IDialogService dialogService,
         ISettingsService settingsService)
-        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), dialogService, settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, new ImageSharpExportService(), new SystemDrawingPrintService(), dialogService, settingsService)
     {
     }
 
@@ -134,11 +135,24 @@ public partial class MainViewModel : ObservableObject
         IImageExportService imageExportService,
         IDialogService dialogService,
         ISettingsService settingsService)
+        : this(scannerService, mockScannerService, pdfExportService, imageExportService, new SystemDrawingPrintService(), dialogService, settingsService)
+    {
+    }
+
+    public MainViewModel(
+        IScannerService scannerService,
+        MockScannerService mockScannerService,
+        IPdfExportService pdfExportService,
+        IImageExportService imageExportService,
+        IPrintService printService,
+        IDialogService dialogService,
+        ISettingsService settingsService)
     {
         _scannerService = scannerService ?? throw new ArgumentNullException(nameof(scannerService));
         _mockScannerService = mockScannerService ?? throw new ArgumentNullException(nameof(mockScannerService));
         _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
         _imageExportService = imageExportService ?? throw new ArgumentNullException(nameof(imageExportService));
+        _printService = printService ?? throw new ArgumentNullException(nameof(printService));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
 
@@ -595,6 +609,59 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsExporting = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task PrintDocumentAsync()
+    {
+        if (!CanSave || Pages.Count == 0) return;
+
+        var printers = _printService.GetInstalledPrinters();
+        if (printers == null || printers.Count == 0)
+        {
+            ShowNotification("Impresoras no encontradas", "No se detectaron impresoras instaladas en el equipo.", InfoBarSeverity.Warning);
+            return;
+        }
+
+        if (WindowHelper.MainWindow?.Content?.XamlRoot == null)
+        {
+            var raw = Pages.Select(p => p.Model).ToList();
+            await _printService.PrintPagesAsync(raw);
+            return;
+        }
+
+        var defaultPrinter = _printService.GetDefaultPrinter();
+        var dialog = new Views.PrintDocumentDialog(printers, defaultPrinter)
+        {
+            XamlRoot = WindowHelper.MainWindow.Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var options = dialog.GetPrintOptions();
+            StatusMessage = "Imprimiendo documento...";
+            IsExporting = true;
+            try
+            {
+                var rawPages = Pages.Select(p => p.Model).ToList();
+                bool success = await _printService.PrintPagesAsync(rawPages, options);
+                if (success)
+                {
+                    StatusMessage = "Documento enviado a la impresora.";
+                    ShowNotification("Impresión Enviada", $"El documento se ha enviado a {options.PrinterName}.", InfoBarSeverity.Success);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = "Error al imprimir documento.";
+                ShowNotification("Error de Impresión", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                IsExporting = false;
+            }
         }
     }
 

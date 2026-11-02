@@ -182,6 +182,14 @@
                                         <FontIcon Glyph="&#xEB9F;" />
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Imprimir documento (Ctrl+P)"
+                                    Command="{x:Bind ViewModel.PrintDocumentCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE749;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
                             </MenuFlyout>
                         </SplitButton.Flyout>
                     </SplitButton>
