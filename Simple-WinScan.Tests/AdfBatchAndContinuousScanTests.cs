@@ -30,6 +30,11 @@ public class AdfBatchAndContinuousScanTests
             return Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(list);
         }
 
+        public Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner)
+        {
+            return Task.FromResult(ScannerCapabilities.Default);
+        }
+
         public Task<ScannedPage> ScanPageAsync(
             ScannerDeviceInfo? scanner,
             ScanProfile profile,

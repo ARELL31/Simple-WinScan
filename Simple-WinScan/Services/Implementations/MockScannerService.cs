@@ -36,6 +36,11 @@ public class MockScannerService : IScannerService
         return Task.FromResult(list);
     }
 
+    public Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner)
+    {
+        return Task.FromResult(ScannerCapabilities.Default);
+    }
+
     public async Task<ScannedPage> ScanPageAsync(
         ScannerDeviceInfo? scanner,
         ScanProfile profile,

@@ -172,6 +172,14 @@
                                     Text="Habilitar escáner virtual (modo simulación)"
                                     IsChecked="{x:Bind ViewModel.IsVirtualScannerEnabled, Mode=OneWay}"
                                     Command="{x:Bind ViewModel.ToggleVirtualScannerCommand}" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Preferencias de digitalización..."
+                                    Command="{x:Bind ViewModel.OpenSettingsCommand}">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE713;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>

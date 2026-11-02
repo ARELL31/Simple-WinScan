@@ -9,6 +9,7 @@ namespace Simple_WinScan.Services.Interfaces;
 public interface IScannerService
 {
     Task<IReadOnlyList<ScannerDeviceInfo>> GetAvailableScannersAsync();
+    Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner);
     Task<ScannedPage> ScanPageAsync(ScannerDeviceInfo? scanner, ScanProfile profile, IProgress<int>? progress = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ScannedPage>> ScanBatchAsync(ScannerDeviceInfo? scanner, ScanProfile profile, Action<ScannedPage> onPageAcquired, IProgress<int>? progress = null, CancellationToken cancellationToken = default);
     bool IsMockMode { get; }

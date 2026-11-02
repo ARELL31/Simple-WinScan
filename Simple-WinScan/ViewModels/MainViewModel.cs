@@ -571,6 +571,45 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    public async Task OpenSettingsAsync()
+    {
+        var activeService = (SelectedScanner?.Id == MockScannerService.MockScannerId)
+            ? (IScannerService)_mockScannerService
+            : _scannerService;
+
+        var caps = SelectedScanner != null
+            ? await activeService.GetCapabilitiesAsync(SelectedScanner)
+            : ScannerCapabilities.Default;
+
+        var settingsVm = new ScanSettingsViewModel(_settingsService, caps);
+        await settingsVm.InitializeAsync();
+
+        if (Helpers.WindowHelper.MainWindow?.Content?.XamlRoot is Microsoft.UI.Xaml.XamlRoot xamlRoot)
+        {
+            var dialog = new Views.ScanSettingsDialog(settingsVm)
+            {
+                XamlRoot = xamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                await settingsVm.SaveAsync();
+                var saved = await _settingsService.LoadSettingsAsync();
+                ContinuousScanDelaySeconds = saved.ContinuousScanDelaySeconds;
+
+                SelectedProfile = SelectedProfile with
+                {
+                    Dpi = saved.CustomDpi,
+                    PageFormat = saved.PaperSize
+                };
+
+                ShowNotification("Preferencias actualizadas", "Se aplicaron los nuevos ajustes de digitalización.", InfoBarSeverity.Success);
+            }
+        }
+    }
+
     private async void OnPageDeleteRequested(ScannedPageItemViewModel pageVm)
     {
         await DeletePageInternalAsync(pageVm);

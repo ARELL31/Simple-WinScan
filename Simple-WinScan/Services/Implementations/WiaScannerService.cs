@@ -44,6 +44,11 @@ public class WiaScannerService : IScannerService
         });
     }
 
+    public Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner)
+    {
+        return Task.FromResult(ScannerCapabilities.Default);
+    }
+
     public Task<ScannedPage> ScanPageAsync(
         ScannerDeviceInfo? scanner,
         ScanProfile profile,

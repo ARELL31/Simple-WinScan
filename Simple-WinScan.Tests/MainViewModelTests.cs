@@ -27,6 +27,11 @@ public class MainViewModelTests
             return Task.FromResult<IReadOnlyList<ScannerDeviceInfo>>(new List<ScannerDeviceInfo>());
         }
 
+        public Task<ScannerCapabilities> GetCapabilitiesAsync(ScannerDeviceInfo scanner)
+        {
+            return Task.FromResult(ScannerCapabilities.Default);
+        }
+
         public Task<ScannedPage> ScanPageAsync(
             ScannerDeviceInfo? scanner,
             ScanProfile profile,
